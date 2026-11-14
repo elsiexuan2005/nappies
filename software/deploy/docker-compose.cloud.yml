@@ -1,0 +1,58 @@
+# CLOUD stack: a single VM / container host (for the hackathon or a small pilot).
+# For scale, use deploy/k8s/podcare-cloud.yaml or a managed container platform.
+#   API_KEY=change-me docker compose -f deploy/docker-compose.cloud.yml up --build
+# Through the gateway on port 80:
+#   /business  P&G business dashboard     /lab  Product Lab
+#   /v1/...    ingest API                 /v1/models/...  model registry
+name: podcare-cloud
+
+x-app: &app
+  image: podcare:latest
+  build: { context: .., dockerfile: deploy/Dockerfile }
+  restart: unless-stopped
+  environment: &env
+    CLOUD_DATA: /data
+    BENCH_DIR: /data/bench
+    REGISTRY_DIR: /data/registry
+    API_KEY: ${API_KEY:-dev-key}
+  volumes: [cloud-data:/data]
+
+services:
+  trainer:                                     # one-shot job; re-run to publish a new model version
+    <<: *app
+    restart: "no"
+    command: ["python", "services/cloud/trainer.py"]
+    environment: { <<: *env, SESSIONS: "${SESSIONS:-250}" }
+
+  model-registry:
+    <<: *app
+    command: ["python", "services/cloud/model_registry.py"]
+    environment: { <<: *env, PORT: "9004" }
+    depends_on: { trainer: { condition: service_completed_successfully } }
+
+  ingest:
+    <<: *app
+    command: ["python", "services/cloud/ingest.py"]
+    environment: { <<: *env, PORT: "9001", RETENTION_DAYS: "${RETENTION_DAYS:-365}" }
+
+  fleet:
+    <<: *app
+    command: ["python", "services/cloud/fleet_service.py"]
+    environment: { <<: *env, PORT: "9002", INGEST_URL: "http://ingest:9001" }
+    depends_on: [ingest]
+
+  lab:
+    <<: *app
+    command: ["python", "services/cloud/lab_service.py"]
+    environment: { <<: *env, PORT: "9003" }
+    depends_on: { trainer: { condition: service_completed_successfully } }
+
+  gateway:                                     # reverse proxy; add a domain name here for automatic HTTPS
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "9001:9001", "9004:9004"]
+    volumes: [./Caddyfile:/etc/caddy/Caddyfile:ro]
+    depends_on: [ingest, fleet, lab, model-registry]
+
+volumes:
+  cloud-data: {}

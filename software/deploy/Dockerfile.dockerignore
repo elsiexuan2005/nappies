@@ -1,0 +1,10 @@
+**/__pycache__
+**/.venv
+cloud_data
+edge_data
+captures
+bench/plots
+training_data.csv
+models.joblib
+models_report.txt
+synthetic_sample.csv

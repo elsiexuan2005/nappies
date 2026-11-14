@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PodCare: parent app</title>
+<style>
+  @font-face { font-family: "Fraunces"; src: url("/vendor/fraunces.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+  @font-face { font-family: "Figtree"; src: url("/vendor/figtree.woff2") format("woff2"); font-weight: 300 900; font-display: swap; }
+
+  :root {
+    --midnight: #1D2547;
+    --moonmilk: #EEF0F7;
+    --lagoon: #3E8E9B;
+    --apricot: #F2A65A;
+    --rose: #E0605E;
+    --sage: #7DB58F;
+
+    --page: #DDE1EE;
+    --screen: #F8F9FC;
+    --panel: #FFFFFF;
+    --ink: var(--midnight);
+    --soft: #5D6584;
+    --line: #E3E6F0;
+    --track: #E6EAF3;
+    --liquid: var(--lagoon);
+    --display: "Fraunces", Georgia, serif;
+    --ui: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  body.night {
+    --page: #10152B;
+    --screen: var(--midnight);
+    --panel: #252E56;
+    --ink: var(--moonmilk);
+    --soft: #A6ADCB;
+    --line: #333D6B;
+    --track: #2C3662;
+  }
+  body.level-orange { --liquid: var(--apricot); }
+  body.level-red { --liquid: var(--rose); }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: var(--ui); color: var(--ink); background: var(--page);
+    min-height: 100vh; display: flex; gap: 40px; justify-content: center; align-items: flex-start;
+    padding: 40px 24px; transition: background-color 1.2s ease;
+  }
+
+  /* ---------- phone ---------- */
+  .phone {
+    width: 400px; height: 840px; flex: none; border-radius: 48px; padding: 12px;
+    background: #0E1226; box-shadow: 0 30px 80px rgba(16, 21, 43, .35);
+  }
+  .screen {
+    height: 100%; border-radius: 38px; overflow-y: auto; overflow-x: hidden;
+    background: var(--screen); scrollbar-width: none; isolation: isolate;
+  }
+  .screen::-webkit-scrollbar { display: none; }
+  .app { padding: 26px 22px 30px; min-height: 100%; background: var(--screen); transition: background-color 1.2s ease; }
+
+  header.top { display: flex; justify-content: space-between; align-items: center; }
+  .baby-name { font-family: var(--display); font-size: 26px; font-weight: 600; line-height: 1.1; font-variation-settings: "SOFT" 100, "WONK" 1; }
+  .baby-meta { color: var(--soft); font-size: 13px; margin-top: 2px; }
+  .conn { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--soft); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--sage); }
+  .dot.off { background: var(--rose); }
+
+  /* hero */
+  .hero { text-align: center; margin-top: 18px; }
+  .drop { width: 170px; height: 204px; display: block; margin: 0 auto; }
+  .drop .track { fill: var(--track); transition: fill 1.2s ease; }
+  .drop .liquid { fill: var(--liquid); transition: fill .6s ease; }
+  .drop .liquid-back { fill: var(--liquid); opacity: .45; transition: fill .6s ease; }
+  .wave { animation: wave 4s linear infinite; }
+  .wave.back { animation-duration: 6.5s; animation-direction: reverse; }
+  @keyframes wave { to { transform: translateX(-100px); } }
+  .level-g { transition: transform 1s ease; }
+  .fill-read { margin-top: 8px; font-size: 14px; color: var(--soft); }
+  .fill-read b { font-family: var(--display); font-size: 22px; color: var(--ink); font-weight: 600; margin-right: 4px; }
+
+  .headline {
+    font-family: var(--display); font-weight: 500; font-size: 30px; line-height: 1.15;
+    margin: 18px 6px 8px; letter-spacing: -.01em; font-variation-settings: "SOFT" 100, "opsz" 72;
+  }
+  .detail { color: var(--soft); font-size: 16px; line-height: 1.45; margin: 0 10px; }
+
+  .room-alert { display: none; margin: 14px 4px 0; padding: 11px 14px; border-radius: 14px; font-size: 14px; line-height: 1.4; text-align: left;
+    background: rgba(242, 166, 90, .16); color: var(--ink); border: 1px solid rgba(242, 166, 90, .5); }
+  .room-alert.alert { background: rgba(224, 96, 94, .15); border-color: rgba(224, 96, 94, .55); }
+  .room-alert.show { display: block; }
+  .facts { display: flex; justify-content: center; gap: 22px; margin: 18px 0 20px; font-size: 13px; color: var(--soft); }
+  .facts strong { display: block; color: var(--ink); font-size: 17px; font-weight: 600; }
+
+  .btn {
+    font: 600 16px var(--ui); border: 0; border-radius: 16px; padding: 15px 18px; width: 100%;
+    background: var(--ink); color: var(--screen); cursor: pointer; transition: transform .1s ease, background-color 1.2s ease;
+  }
+  .btn:active { transform: scale(.98); }
+  .btn:focus-visible, .ctl:focus-visible, select:focus-visible { outline: 3px solid var(--lagoon); outline-offset: 3px; }
+
+  /* today */
+  h2 { font-family: var(--display); font-size: 21px; font-weight: 600; margin: 30px 0 10px; font-variation-settings: "SOFT" 100; }
+  .panel { background: var(--panel); border-radius: 22px; padding: 4px 18px; transition: background-color 1.2s ease; }
+  .row { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 14px 0; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: 0; }
+  .row .name { font-weight: 600; font-size: 15px; }
+  .row .value { font-weight: 600; font-size: 15px; text-align: right; }
+  .row .sub { color: var(--soft); font-size: 13px; line-height: 1.35; }
+  .row .status { font-size: 13px; text-align: right; display: flex; align-items: center; gap: 6px; justify-content: flex-end; white-space: nowrap; }
+  .status i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; background: var(--sage); }
+  .status.watch i { background: var(--apricot); }
+  .status.alert i { background: var(--rose); }
+  .bar { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--track); margin-top: 8px; overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--sage); border-radius: 3px; transition: width 1s ease; }
+
+  /* day strip */
+  .day { background: var(--panel); border-radius: 22px; padding: 18px 18px 6px; transition: background-color 1.2s ease; }
+  .day-now { font-family: var(--display); font-size: 19px; font-weight: 500; margin: 0 0 14px; font-variation-settings: "SOFT" 100; }
+  .strip-wrap { position: relative; padding-top: 14px; }
+  .markers { position: absolute; top: 0; left: 0; right: 0; height: 10px; }
+  .markers span { position: absolute; top: 2px; width: 7px; height: 7px; margin-left: -3.5px; border-radius: 50%; background: var(--lagoon); }
+  .markers span.poo { background: #A0745A; }
+  .markers span.change { background: none; width: 2px; height: 10px; top: 0; margin-left: -1px; border-radius: 1px; background: var(--soft); opacity: .6; }
+  .strip { position: relative; height: 30px; border-radius: 9px; overflow: hidden; background: var(--track); }
+  .strip span { position: absolute; top: 0; bottom: 0; }
+  .lv0 { background: #8E96C8; } .lv1 { background: #A9D3B5; } .lv2 { background: var(--apricot); }
+  .strip-times { display: flex; justify-content: space-between; font-size: 12px; color: var(--soft); margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .keys { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--soft); margin: 12px 0 4px; }
+  .keys i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .keys b { color: var(--ink); font-weight: 600; }
+  .day .row:first-of-type { border-top: 1px solid var(--line); }
+
+  .chart-wrap { background: var(--panel); border-radius: 22px; padding: 14px 12px 8px; height: 170px; transition: background-color 1.2s ease; }
+
+  .timeline { list-style: none; margin: 0; padding: 0; }
+  .timeline li { display: grid; grid-template-columns: 52px 14px 1fr; align-items: center; padding: 8px 0; font-size: 14px; }
+  .timeline time { color: var(--soft); font-variant-numeric: tabular-nums; font-size: 13px; }
+  .timeline .mark { width: 9px; height: 9px; border-radius: 50%; background: var(--lagoon); }
+  .mark.poo { background: #A0745A; } .mark.change { background: var(--ink); } .mark.sleep, .mark.wake { background: #8E96C8; }
+
+  .note { color: var(--soft); font-size: 12px; line-height: 1.5; margin-top: 26px; }
+
+  /* ---------- demo controls ---------- */
+  .side { width: 300px; flex: none; padding-top: 30px; }
+  .side h3 { font-family: var(--display); font-weight: 600; font-size: 20px; margin: 0 0 4px; color: var(--ink); }
+  .side p { color: var(--soft); font-size: 13px; line-height: 1.5; margin: 0 0 16px; }
+  .ctl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .ctl {
+    font: 600 14px var(--ui); border-radius: 14px; padding: 12px; cursor: pointer;
+    border: 1.5px solid var(--line); background: var(--panel); color: var(--ink);
+  }
+  .ctl.on { background: var(--midnight); color: var(--moonmilk); border-color: var(--midnight); }
+  body.night .ctl.on { background: var(--moonmilk); color: var(--midnight); border-color: var(--moonmilk); }
+  .ctl.wide { grid-column: 1 / -1; }
+  label.speed { display: flex; justify-content: space-between; align-items: center; font-size: 14px; margin-top: 14px; color: var(--ink); }
+  select { font: 500 14px var(--ui); padding: 8px 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--panel); color: var(--ink); }
+  .probs { margin-top: 26px; }
+  .prob { display: grid; grid-template-columns: 60px 1fr 42px; gap: 8px; align-items: center; font-size: 13px; margin: 6px 0; color: var(--ink); }
+  .prob .t { height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; }
+  .prob .t span { display: block; height: 100%; background: var(--lagoon); transition: width .6s ease; }
+  .prob em { font-style: normal; text-align: right; color: var(--soft); font-variant-numeric: tabular-nums; }
+  .clock { font-variant-numeric: tabular-nums; }
+
+  @media (max-width: 820px) {
+    body { flex-direction: column; align-items: center; padding: 20px 12px; }
+    .side { width: 100%; max-width: 400px; padding-top: 0; }
+  }
+  @media (max-width: 440px) {
+    body { padding: 0; gap: 20px; }
+    .phone { width: 100%; height: auto; min-height: 100vh; border-radius: 0; padding: 0; box-shadow: none; }
+    .screen { border-radius: 0; }
+    .side { padding: 0 20px 30px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<main class="phone" aria-label="Parent app">
+  <div class="screen">
+    <div class="app">
+      <header class="top">
+        <div>
+          <div class="baby-name" id="babyName">Ava</div>
+          <div class="baby-meta" id="babyMeta">4 months, size 3</div>
+        </div>
+        <div class="conn"><span class="dot" id="connDot"></span><span id="connText">Pod connected</span></div>
+      </header>
+
+      <section class="hero" aria-live="polite">
+        <svg class="drop" viewBox="0 0 200 240" role="img" aria-labelledby="fillLabel">
+          <title id="fillLabel">Diaper fill level</title>
+          <defs>
+            <clipPath id="dropClip">
+              <path d="M100 6 C100 6 26 96 26 156 a74 74 0 0 0 148 0 C174 96 100 6 100 6 Z"/>
+            </clipPath>
+          </defs>
+          <g clip-path="url(#dropClip)">
+            <rect class="track" x="0" y="0" width="200" height="240"/>
+            <g class="level-g" id="levelG" transform="translate(0,230)">
+              <path class="liquid-back wave back" d="M0 8 Q25 0 50 8 T100 8 T150 8 T200 8 T250 8 T300 8 T350 8 T400 8 V260 H0 Z"/>
+              <path class="liquid wave" d="M0 12 Q25 4 50 12 T100 12 T150 12 T200 12 T250 12 T300 12 T350 12 T400 12 V260 H0 Z"/>
+            </g>
+          </g>
+        </svg>
+        <div class="fill-read"><b id="fillPct">0%</b>full</div>
+        <h1 class="headline" id="headline">Connecting to the pod…</h1>
+        <p class="detail" id="detail">This takes about 30 seconds after a diaper change.</p>
+        <p class="room-alert" id="roomAlert" role="status"></p>
+        <div class="facts">
+          <div><strong id="factTime">–</strong>in this diaper</div>
+          <div><strong id="factFull">–</strong>chance full in 1 h</div>
+          <div><strong id="factWees">–</strong>wees in it</div>
+        </div>
+        <button class="btn" id="changeBtn">I changed the diaper</button>
+      </section>
+
+      <h2>Today</h2>
+      <div class="panel">
+        <div class="row">
+          <div class="name">Healthy diaper time</div><div class="value" id="healthyVal">–</div>
+          <div class="sub">Time in a clean diaper that isn't over-full</div><div class="status" id="healthyStatus"></div>
+          <div class="bar"><span id="healthyBar" style="width:0%"></span></div>
+        </div>
+        <div class="row">
+          <div class="name">Hydration</div><div class="value" id="hydVal">–</div>
+          <div class="sub" id="hydSub"></div><div class="status" id="hydStatus"></div>
+        </div>
+        <div class="row">
+          <div class="name">Gut</div><div class="value" id="gutVal">–</div>
+          <div class="sub" id="gutSub"></div><div class="status" id="gutStatus"></div>
+        </div>
+        <div class="row">
+          <div class="name">Skin</div><div class="value" id="skinVal">–</div>
+          <div class="sub" id="skinSub"></div><div class="status" id="skinStatus"></div>
+        </div>
+      </div>
+
+      <h2>Sleep and activity</h2>
+      <div class="day">
+        <p class="day-now" id="dayNow">–</p>
+        <div class="strip-wrap" aria-label="Today's sleep and activity">
+          <div class="markers" id="markers"></div>
+          <div class="strip" id="strip"></div>
+        </div>
+        <div class="strip-times"><span id="tStart"></span><span id="tMid"></span><span>Now</span></div>
+        <div class="keys">
+          <span><i class="lv0"></i>Asleep <b id="kSleep"></b></span>
+          <span><i class="lv1"></i>Calm <b id="kCalm"></b></span>
+          <span><i class="lv2"></i>Active <b id="kActive"></b></span>
+        </div>
+        <div class="row">
+          <div class="name">Longest sleep</div><div class="value" id="longVal">–</div>
+          <div class="sub" id="longSub"></div><div class="status" id="longStatus"></div>
+        </div>
+        <div class="row">
+          <div class="name" id="roomName">Room</div><div class="value" id="roomVal">–</div>
+          <div class="sub" id="roomSub"></div><div class="status" id="roomStatus"></div>
+        </div>
+        <div class="row">
+          <div class="name">Woken by the diaper</div><div class="value" id="wwVal">–</div>
+          <div class="sub" id="wwSub"></div><div class="status" id="wwStatus"></div>
+        </div>
+      </div>
+
+      <h2>This diaper</h2>
+      <div class="chart-wrap"><canvas id="fillChart" aria-label="Diaper fill since the last change"></canvas></div>
+
+      <h2>Timeline</h2>
+      <ul class="timeline" id="timeline"></ul>
+
+      <p class="note">Wellness insights, not medical advice. If you're worried about your baby, contact your doctor.
+        Temperature readings are approximate (±2°C) and are not your baby's body temperature.
+        <span id="demoNote"></span></p>
+    </div>
+  </div>
+</main>
+
+<aside class="side" id="side">
+  <h3>Demo controls</h3>
+  <p id="sideIntro">Simulated pod. Add events and watch the app respond.</p>
+  <div class="ctl-grid" id="simCtl">
+    <button class="ctl" data-act="wee">Add a wee</button>
+    <button class="ctl" data-act="poo">Add a poo</button>
+    <button class="ctl wide" id="sleepBtn">Baby asleep</button>
+  </div>
+  <label class="speed" id="roomRow">Room temperature
+    <select id="roomTemp">
+      <option value="15">15°C</option><option value="18">18°C</option><option value="19">19°C</option>
+      <option value="22">22°C</option><option value="26">26°C</option>
+    </select>
+  </label>
+  <label class="speed" id="speedRow">Time speed
+    <select id="speed">
+      <option value="1">Real time</option><option value="60">1 min per second</option>
+      <option value="300">5 min per second</option><option value="600">10 min per second</option>
+    </select>
+  </label>
+  <div class="probs">
+    <h3>What the pod sees</h3>
+    <p>Model confidence for the current diaper.</p>
+    <div id="probs"></div>
+    <p class="clock" id="clock"></p>
+  </div>
+</aside>
+
+<script src="/vendor/chart.umd.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const fmtTime = t => new Date(t * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+const fmtDur = m => m < 60 ? `${Math.round(m)} min` : `${Math.floor(m / 60)} h ${String(Math.round(m % 60)).padStart(2, "0")} m`;
+const roughDur = m => m >= 235 ? "4+ hours" : m < 60 ? `${Math.max(5, Math.round(m / 5) * 5)} minutes` : `${(Math.round(m / 30) / 2).toString()} hours`;
+const STATUS_WORD = { ok: "Good", watch: "Keep an eye", alert: "Check" };
+
+function status(el, level, word) {
+  el.className = "status " + level;
+  el.innerHTML = `<i></i>${word}`;
+}
+
+function message(now) {
+  const { state, sat, ttl_min: ttl, p_full_1h: p, asleep } = now;
+  if (state === "soiled") return ["red", "Poo alert. Time for a change.", "A fresh diaper now keeps skin happy."];
+  if (sat >= 0.85) return ["red", "It's full. Time for a change.", "Change soon to avoid a leak."];
+  if (p > 0.7) return ["red", "Nearly full. Time for a change.", `${Math.round(p * 100)}% chance it's full within the hour.`];
+  if (state === "wet" && p > 0.4) return ["orange", "Getting full.", `Good time to change. ${Math.round(p * 100)}% chance it's full within the hour.`];
+  if (state === "wet" && asleep) return ["orange", "Wet, but sleeping soundly.", `No need to wake. You can wait about ${roughDur(ttl)}.`];
+  if (state === "wet") return ["orange", "A little wet.", `Change when it suits you, within about ${roughDur(ttl)}.`];
+  return ["green", "All dry. Nothing to do.", asleep ? "Sleeping peacefully." : "We'll let you know when it's time."];
+}
+
+let chart;
+function initChart() {
+  chart = new Chart($("fillChart"), {
+    type: "line",
+    data: { labels: [], datasets: [{ data: [], borderWidth: 2.5, pointRadius: 0, tension: .3, fill: true }] },
+    options: {
+      animation: false, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { type: "linear", ticks: { maxTicksLimit: 5, callback: v => `${Math.round(v)}m`, font: { family: "Figtree" } }, grid: { display: false }, border: { display: false } },
+        y: { min: 0, max: 1, ticks: { stepSize: .5, callback: v => `${v * 100}%`, font: { family: "Figtree" } }, grid: { color: "rgba(128,140,180,.15)" }, border: { display: false } }
+      }
+    }
+  });
+}
+function themeChart() {
+  const cs = getComputedStyle(document.body);
+  const liquid = cs.getPropertyValue("--liquid").trim(), soft = cs.getPropertyValue("--soft").trim();
+  const ds = chart.data.datasets[0];
+  ds.borderColor = liquid; ds.backgroundColor = liquid + "33";
+  chart.options.scales.x.ticks.color = soft; chart.options.scales.y.ticks.color = soft;
+}
+
+async function act(action, value) {
+  await fetch("/api/action", { method: "POST", body: JSON.stringify({ action, value }) });
+  refresh();
+}
+document.querySelectorAll("[data-act]").forEach(b => b.onclick = () => act(b.dataset.act));
+$("changeBtn").onclick = () => act("change");
+$("speed").onchange = e => act("speed", e.target.value);
+$("roomTemp").onchange = e => act("room_temp", e.target.value);
+let simAsleep = true;
+$("sleepBtn").onclick = () => act("asleep", !simAsleep);
+
+function render(s) {
+  $("babyName").textContent = s.baby.name;
+  $("babyMeta").textContent = `${s.baby.age}, size ${s.baby.size}`;
+  const conn = s.connected.sensors;
+  $("connDot").className = "dot" + (conn ? "" : " off");
+  $("connText").textContent = !conn ? "Pod not responding"
+    : (s.mode !== "sim" && !s.calibrated) ? "Pod connected, not calibrated"
+    : s.connected.imu ? (s.connected.motion_source === "camera" ? "Pod connected (camera motion)" : "Pod connected")
+    : "Pod connected, no motion sensor";
+  $("clock").textContent = `Pod time ${fmtTime(s.clock)}` + (s.mode === "sim" && s.speed > 1 ? `, running ${s.speed}× faster` : "");
+
+  // side panel
+  const sim = s.mode === "sim";
+  $("simCtl").style.display = sim ? "" : "none";
+  $("speedRow").style.display = sim ? "" : "none";
+  $("roomRow").style.display = sim && s.climate.mode === "room" ? "" : "none";
+  if (sim && document.activeElement !== $("roomTemp")) $("roomTemp").value = String(Math.round(s.sim_room_temp));
+  $("sideIntro").textContent = sim ? "Simulated pod. Add events and watch the app respond." :
+    `Live pod. Sensor board ${s.connected.sensors ? "connected" : "not responding"}, motion ${s.connected.imu ? `from the Nicla ${s.connected.motion_source === "camera" ? "camera" : "IMU"}` : "not connected"}.` +
+    (s.calibrated ? "" : " Not calibrated yet: readings may be wrong until you run calibrate.py.");
+  if (sim) {
+    simAsleep = s.sim.asleep;
+    $("sleepBtn").classList.toggle("on", simAsleep);
+    $("sleepBtn").textContent = simAsleep ? "Baby asleep" : "Baby awake";
+    $("speed").value = String(s.speed);
+  }
+
+  const n = s.now;
+  if (n) {
+    const [level, head, det] = message(n);
+    document.body.classList.toggle("night", n.asleep);
+    document.body.classList.remove("level-green", "level-orange", "level-red");
+    document.body.classList.add("level-" + level);
+    const sat = Math.min(1, Math.max(0, n.sat));
+    $("levelG").setAttribute("transform", `translate(0,${230 - sat * 222})`);
+    $("fillPct").textContent = `${Math.round(sat * 100)}%`;
+    $("headline").textContent = head;
+    $("detail").textContent = det;
+    $("factFull").textContent = sat >= 0.85 ? "Full" : `${Math.round(n.p_full_1h * 100)}%`;
+    $("probs").innerHTML = Object.entries(n.probs).map(([k, v]) =>
+      `<div class="prob"><span>${k[0].toUpperCase() + k.slice(1)}</span><div class="t"><span style="width:${v * 100}%"></span></div><em>${Math.round(v * 100)}%</em></div>`).join("");
+  } else {
+    $("headline").textContent = "Fresh diaper on.";
+    $("detail").textContent = "Learning this diaper's baseline. Ready in about 30 seconds.";
+    $("levelG").setAttribute("transform", "translate(0,230)");
+    $("fillPct").textContent = "0%";
+  }
+  $("factTime").textContent = fmtDur(s.diaper.minutes);
+  $("factWees").textContent = s.diaper.wees;
+
+  const t = s.today;
+  const hp = Math.round(t.healthy_pct * 100);
+  $("healthyVal").textContent = `${hp}%`;
+  $("healthyBar").style.width = `${hp}%`;
+  status($("healthyStatus"), hp >= 90 ? "ok" : hp >= 75 ? "watch" : "alert", hp >= 90 ? "Good" : hp >= 75 ? "Fair" : "Low");
+  $("hydVal").textContent = `${t.wees} wet`;
+  $("hydSub").textContent = t.hydration.detail;
+  status($("hydStatus"), t.hydration.level, t.hydration.label);
+  $("gutVal").textContent = `${t.poos} ${t.poos === 1 ? "poo" : "poos"}`;
+  $("gutSub").textContent = t.gut.detail + ". Colour check needs the camera.";
+  status($("gutStatus"), t.gut.level, t.gut.label);
+  $("skinVal").textContent = `${t.rash.label} rash risk`;
+  $("skinSub").textContent = `${Math.round(t.soiled_min)} min in a soiled diaper, ${Math.round(t.overfull_min)} min over-full` +
+    (s.climate.mode === "nappy" ? `, ${Math.round(t.humid_min)} min humid` : "");
+  status($("skinStatus"), t.rash.level, STATUS_WORD[t.rash.level]);
+  renderDay(s);
+
+  $("timeline").innerHTML = s.timeline.map(e =>
+    `<li><time>${fmtTime(e.t)}</time><span class="mark ${e.type}"></span><span>${e.label}</span></li>`).join("");
+  $("demoNote").textContent = s.demo_history ? "Events before this session are simulated for the demo." : "";
+
+  if (s.series) {
+    chart.data.datasets[0].data = s.series.mins.map((m, i) => ({ x: m, y: s.series.sat[i] }));
+  } else chart.data.datasets[0].data = [];
+  themeChart();
+  chart.update();
+}
+
+function renderDay(s) {
+  const sl = s.sleep, imu = s.connected.imu;
+  if (!imu) { $("dayNow").textContent = "Connect the motion sensor to track sleep and activity."; }
+  else if (sl.current) {
+    $("dayNow").textContent = sl.current.state === "asleep"
+      ? `Asleep for ${fmtDur(sl.current.minutes)}` : `Awake for ${fmtDur(sl.current.minutes)}`;
+  }
+  const t0 = s.day_start, t1 = s.clock, span = Math.max(60, t1 - t0);
+  const pct = t => Math.min(100, Math.max(0, (t - t0) / span * 100));
+  $("strip").innerHTML = sl.runs.map(r =>
+    `<span class="lv${r.level}" style="left:${pct(r.start)}%;width:${Math.max(0.3, pct(r.end) - pct(r.start))}%"></span>`).join("");
+  $("markers").innerHTML = sl.markers.map(m => `<span class="${m.type}" style="left:${pct(m.t)}%" title="${m.type}"></span>`).join("");
+  $("tStart").textContent = fmtTime(t0);
+  $("tMid").textContent = fmtTime(t0 + span / 2);
+  $("kSleep").textContent = fmtDur(sl.sleep_min);
+  $("kCalm").textContent = fmtDur(sl.calm_min);
+  $("kActive").textContent = fmtDur(sl.active_min);
+  $("longVal").textContent = sl.longest_min ? fmtDur(sl.longest_min) : "–";
+  $("longSub").textContent = `${sl.naps} ${sl.naps === 1 ? "sleep" : "sleeps"} today, ${sl.wakeups} wake-ups`;
+  status($("longStatus"), "ok", sl.current && sl.current.state === "asleep" ? "Asleep now" : "Awake now");
+  const c = s.climate, nappy = c.mode === "nappy";
+  $("roomName").textContent = nappy ? "Skin climate" : "Room";
+  if (c.connected) {
+    $("roomVal").textContent = `${Math.round(c.temp)}°C, ${Math.round(c.hum)}%`;
+    $("roomSub").textContent = nappy
+      ? `${c.detail} Inside the nappy at the waistband.`
+      : c.detail + (c.sleep_in_range != null ? ` ${Math.round(c.sleep_in_range * 100)}% of today's sleep was at 16–20°C.` : "");
+    status($("roomStatus"), c.level, c.label);
+  } else {
+    $("roomVal").textContent = "–";
+    $("roomSub").textContent = "Connect the temperature and humidity sensor.";
+    $("roomStatus").innerHTML = "";
+  }
+  const out = !nappy && c.connected && s.now && s.now.asleep && (c.temp > 20 || c.temp < 16);
+  const humidLong = nappy && c.connected && c.level === "alert";
+  $("roomAlert").className = "room-alert" + (out || humidLong ? " show" : "") + ((!nappy && c.connected && c.temp > 24) ? " alert" : "");
+  if (out) $("roomAlert").textContent = c.temp < 16
+    ? `The room is about ${Math.round(c.temp)}°C. Babies sleep best at 16–20°C, so add a layer.`
+    : `The room is about ${Math.round(c.temp)}°C. Babies sleep safest at 16–20°C. ${c.temp > 24 ? "Open a door or window and remove a layer." : "Try lighter bedding."}`;
+  if (humidLong) $("roomAlert").textContent = `It's been humid inside the nappy for ${Math.round(c.humid_min_diaper)} min. Damp skin is more prone to irritation.`;
+  $("wwVal").textContent = `${sl.wet_wakeups} of ${sl.wakeups}`;
+  $("wwSub").textContent = sl.wakeups ? "wake-ups came within 10 min of a wee or poo" : "No wake-ups yet today";
+  const share = sl.wakeups ? sl.wet_wakeups / sl.wakeups : 0;
+  status($("wwStatus"), share > 0.5 ? "watch" : "ok", share > 0.5 ? "Try a night diaper" : "Good");
+}
+
+async function refresh() {
+  try {
+    const r = await fetch("/api/state");
+    render(await r.json());
+  } catch (e) {
+    $("connDot").className = "dot off";
+    $("connText").textContent = "App server not running";
+  }
+}
+initChart();
+refresh();
+setInterval(refresh, 1000);
+</script>
+</body>
+</html>

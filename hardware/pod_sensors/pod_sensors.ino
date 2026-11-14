@@ -1,0 +1,87 @@
+// PodCare sensor board - Arduino UNO Q (moisture + gas + optional DHT11)
+// Combines moisture_sensor.ino and gas_sensor.ino into ONE sketch, in the same JSON style,
+// so both sensors (and the DHT11) stream together from one board.
+//
+// One JSON line per second (values averaged over the second, sampled at 50 Hz):
+//   {"timestamp_ms":12345,"sensor_raw":3050.2,"gas_raw":612.4,"temp_c":21.0,"humidity":48.0}
+// "sensor_raw" = moisture (same key as moisture_sensor.ino), "gas_raw" = gas (same as gas_sensor.ino).
+// temp_c/humidity are null until the DHT11 gives its first good reading.
+//
+// !!! UNO Q WIRING WARNING !!!
+// The UNO Q's MCU pins are 3.3 V, and A0 and A1 are NOT 5 V tolerant.
+//  - DFRobot SEN0193 moisture (A0): output 0-3.0 V -> OK.
+//  - Gas sensor (A1): if the module is powered from 5 V its output can exceed 3.3 V and damage A1.
+//    Measure the output with a multimeter at full gas response; if it can go above 3.3 V, add a
+//    voltage divider (e.g. 10k top / 20k bottom -> x0.67) or power the module from 3.3 V if it allows.
+//  - DHT11 (D2): power from 3.3 V.
+//
+// Libraries: "DHT sensor library" by Adafruit (+ "Adafruit Unified Sensor"). The DHT11 uses
+// tight bit timing; if it doesn't read on the UNO Q core, set USE_DHT 0 - everything else still works.
+
+#define USE_DHT 1
+const int MOISTURE_PIN = A0;
+const int GAS_PIN = A1;
+const int DHT_PIN = 2;
+
+#if USE_DHT
+#include <DHT.h>
+DHT dht(DHT_PIN, DHT11);
+#endif
+
+const unsigned long SAMPLE_MS = 20;    // 50 Hz sampling
+const unsigned long REPORT_MS = 1000;  // 1 line per second
+const unsigned long DHT_MS = 2000;     // DHT11 needs >= 1-2 s between reads
+
+unsigned long mSum = 0, gSum = 0, n = 0;
+float tempC = NAN, hum = NAN;
+
+void setup() {
+  Serial.begin(115200);
+#if !defined(ARDUINO_ARCH_AVR)
+  analogReadResolution(12);            // UNO Q: 0-4095 (classic AVR Uno stays 0-1023)
+#endif
+#if USE_DHT
+  dht.begin();
+#endif
+}
+
+void printNum(float v, int digits) {
+  if (isnan(v)) Serial.print("null"); else Serial.print(v, digits);
+}
+
+void loop() {
+  static unsigned long lastSample = 0, lastReport = 0, lastDht = 0;
+  unsigned long now = millis();
+
+  if (now - lastSample >= SAMPLE_MS) {
+    lastSample = now;
+    mSum += analogRead(MOISTURE_PIN);
+    gSum += analogRead(GAS_PIN);
+    n++;
+  }
+
+#if USE_DHT
+  if (now - lastDht >= DHT_MS) {
+    lastDht = now;
+    float t = dht.readTemperature();
+    float h = dht.readHumidity();
+    if (!isnan(t) && !isnan(h)) { tempC = t; hum = h; }    // keep last good reading
+  }
+#endif
+
+  if (now - lastReport >= REPORT_MS && n > 0) {
+    lastReport = now;
+    Serial.print("{\"timestamp_ms\":");
+    Serial.print(now);
+    Serial.print(",\"sensor_raw\":");
+    Serial.print((float)mSum / n, 1);
+    Serial.print(",\"gas_raw\":");
+    Serial.print((float)gSum / n, 1);
+    Serial.print(",\"temp_c\":");
+    printNum(tempC, 1);
+    Serial.print(",\"humidity\":");
+    printNum(hum, 1);
+    Serial.println("}");
+    mSum = gSum = n = 0;
+  }
+}

@@ -1,0 +1,3 @@
+-r requirements.txt
+streamlit        # live_app.py debug dashboard
+amqtt            # pure-Python MQTT broker used by run_local.py (no Docker needed)

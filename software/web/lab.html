@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PodCare: Product Lab</title>
+<style>
+  @font-face { font-family: "Fraunces"; src: url("/vendor/fraunces.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+  @font-face { font-family: "Figtree"; src: url("/vendor/figtree.woff2") format("woff2"); font-weight: 300 900; font-display: swap; }
+  :root {
+    --midnight: #1D2547; --lagoon: #3E8E9B; --apricot: #F2A65A; --rose: #E0605E; --sage: #7DB58F;
+    --page: #F4F5FA; --panel: #FFFFFF; --ink: var(--midnight); --soft: #5D6584; --line: #E1E4EE;
+    --display: "Fraunces", Georgia, serif; --ui: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--ui); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 44px 32px 60px; }
+  .masthead { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+  .brand { font-weight: 700; font-size: 15px; color: var(--lagoon); }
+  h1 { font-family: var(--display); font-weight: 500; font-size: 46px; line-height: 1.05; margin: 8px 0 10px; letter-spacing: -.015em; max-width: 18ch; font-variation-settings: "SOFT" 50, "opsz" 144; }
+  .lede { color: var(--soft); font-size: 17px; line-height: 1.5; max-width: 62ch; margin: 0; }
+  nav.switch { display: flex; gap: 20px; }
+  nav.switch a { color: var(--ink); font-weight: 600; font-size: 14px; text-decoration: none; border-bottom: 1.5px solid var(--lagoon); padding-bottom: 2px; }
+  .notice { margin: 26px 0 0; padding: 12px 16px; border-radius: 14px; background: rgba(242,166,90,.15); border: 1px solid rgba(242,166,90,.5); font-size: 14px; line-height: 1.5; }
+  .notice code { background: rgba(29,37,71,.07); padding: 1px 6px; border-radius: 5px; }
+
+  .findings { margin: 30px 0 8px; padding: 0; list-style: none; display: grid; gap: 12px; }
+  .findings li { font-family: var(--display); font-size: 22px; line-height: 1.3; max-width: 60ch; padding-left: 22px; position: relative; font-variation-settings: "SOFT" 50; }
+  .findings li::before { content: ""; position: absolute; left: 0; top: .55em; width: 10px; height: 10px; border-radius: 50%; background: var(--lagoon); }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 22px; }
+  .card { background: var(--panel); border-radius: 20px; padding: 24px 26px 22px; }
+  .card.span { grid-column: 1 / -1; }
+  .card h2 { font-family: var(--display); font-weight: 500; font-size: 23px; line-height: 1.2; margin: 0 0 6px; font-variation-settings: "SOFT" 50; }
+  .card .why { color: var(--soft); font-size: 14px; line-height: 1.5; margin: 0 0 14px; max-width: 70ch; }
+  .chart { position: relative; height: 270px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--soft); margin-bottom: 10px; }
+  .legend i { display: inline-block; width: 18px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: 3px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 12px 10px 0; border-top: 1px solid var(--line); vertical-align: top; }
+  thead th { border-top: 0; font-weight: 700; }
+  td.num, th.num { font-variant-numeric: tabular-nums; }
+  td small { color: var(--soft); }
+  .metric-name { color: var(--soft); width: 30%; }
+
+  .trust { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin-bottom: 18px; }
+  .trust > div { padding: 4px 18px; border-left: 1px solid var(--line); }
+  .trust > div:first-child { border-left: 0; padding-left: 0; }
+  .trust .v { font-family: var(--display); font-size: 32px; font-weight: 500; line-height: 1.05; }
+  .trust .k { color: var(--soft); font-size: 13px; line-height: 1.35; margin-top: 6px; }
+  pre { background: #F0F2F8; border-radius: 12px; padding: 14px 16px; font-size: 13px; line-height: 1.6; overflow-x: auto; margin: 0; }
+  .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #EEF0F6; color: var(--soft); }
+  .tag.sim { background: rgba(242,166,90,.2); color: #8A5420; }
+
+  @media (max-width: 960px) {
+    .grid { grid-template-columns: 1fr; }
+    .trust { grid-template-columns: repeat(2, 1fr); row-gap: 14px; }
+    .trust > div:nth-child(3) { border-left: 0; padding-left: 0; }
+    h1 { font-size: 36px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <div>
+      <div class="brand">PodCare for P&amp;G R&amp;D</div>
+      <h1>Product Lab: what happens inside the nappy</h1>
+      <p class="lede">Bench runs on real nappies with test fluid, recorded second by second. Compare products insult by insult instead of only cutting them open afterwards.</p>
+    </div>
+    <nav class="switch"><a href="/business">Business view</a><a href="/">Parent app</a></nav>
+  </header>
+
+  <p class="notice" id="notice" hidden></p>
+  <ul class="findings" id="findings"></ul>
+
+  <div class="grid">
+    <article class="card">
+      <h2>Surface wetness after each insult</h2>
+      <p class="why">How wet the sensor reads. Each insult is a spike. The faster it falls back, the faster the core pulls fluid away from the skin side.</p>
+      <div class="legend" id="legend1"></div>
+      <div class="chart"><canvas id="satChart"></canvas></div>
+    </article>
+    <article class="card">
+      <h2>Humidity inside the nappy</h2>
+      <p class="why">DHT11 placed inside the nappy. Humidity that stays high for longer means a damper microclimate against the skin.</p>
+      <div class="legend" id="legend2"></div>
+      <div class="chart"><canvas id="humChart"></canvas></div>
+    </article>
+
+    <article class="card span">
+      <h2>Side by side</h2>
+      <p class="why">Measured from the same timed protocol for every product: dry baseline, equal insults a few minutes apart, then a press test.</p>
+      <div style="overflow-x:auto"><table id="metrics"></table></div>
+    </article>
+
+    <article class="card span">
+      <h2>Can we trust the readings?</h2>
+      <p class="why" id="trustWhy">The models are checked against labelled bench runs: we mark the exact moment fluid goes in, then see how quickly and how reliably the pod gets it right.</p>
+      <div class="trust" id="trust"></div>
+      <div style="overflow-x:auto"><table id="runs"></table></div>
+    </article>
+
+    <article class="card span">
+      <h2>Record a run</h2>
+      <p class="why">Use the P&amp;G nappies and saline at about body temperature. Put the moisture sensor in the same place for every product, and note where.</p>
+<pre>python bench.py insult   --nappy "Brand A size 3" --placement "under topsheet" --press --port COM3 --port COM4
+python bench.py movement --nappy "Brand A size 3" --port COM3 --port COM4     # false-alarm test, no fluid
+python bench.py poo      --nappy "Brand A size 3" --port COM3 --port COM4
+python validate.py                                                            # report + plots in bench/plots/</pre>
+    </article>
+  </div>
+</div>
+
+<script src="/vendor/chart.umd.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const COLORS = ["#3E8E9B", "#1D2547", "#F2A65A", "#E0605E", "#7DB58F"];
+Chart.defaults.font.family = "Figtree"; Chart.defaults.font.size = 12; Chart.defaults.color = "#5D6584";
+Chart.defaults.plugins.legend.display = false;
+const fmt = (v, unit = "", d = 0) => v === null || v === undefined ? "–" : `${(+v).toFixed(d)}${unit}`;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+const insultLines = mins => ({
+  id: "insults",
+  afterDatasetsDraw(c) {
+    const { top, bottom } = c.chartArea, ctx = c.ctx;
+    ctx.save(); ctx.strokeStyle = "rgba(224,96,94,.55)"; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+    mins.forEach((m, i) => {
+      const x = c.scales.x.getPixelForValue(m);
+      ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
+      ctx.fillStyle = "#E0605E"; ctx.font = "600 11px Figtree"; ctx.fillText(`#${i + 1}`, x + 4, top + 11);
+    });
+    ctx.restore();
+  }
+});
+
+function lineChart(el, labs, key, yOpts) {
+  return new Chart(el, {
+    type: "line",
+    data: { datasets: labs.map((L, i) => ({
+      label: L.nappy, data: L.series.min.map((m, k) => ({ x: m, y: L.series[key][k] })),
+      borderColor: COLORS[i % COLORS.length], borderWidth: 2, pointRadius: 0, tension: .2, spanGaps: true })) },
+    options: { maintainAspectRatio: false, animation: false, parsing: false,
+      scales: { x: { type: "linear", grid: { display: false }, title: { display: true, text: "Minutes since first insult" } },
+                y: Object.assign({ grid: { color: "#EEF0F6" } }, yOpts) },
+      plugins: { tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y}` } } } },
+    plugins: [insultLines(labs[0] ? labs[0].series.insult_min : [])]
+  });
+}
+
+function render(d) {
+  if (d.error) { $("notice").hidden = false; $("notice").textContent = d.error; return; }
+  const labs = d.labs || [];
+  if (d.labs_only_examples) {
+    $("notice").hidden = false;
+    $("notice").innerHTML = "Showing <b>simulated example runs</b> so you can see the page working. Record real runs with <code>bench.py</code> and they replace these automatically.";
+  }
+  $("findings").innerHTML = (d.findings.length ? d.findings : ["Record insult runs for two products to see a comparison here."])
+    .map(f => `<li>${esc(f)}</li>`).join("");
+
+  const legend = labs.map((L, i) => `<span><i style="background:${COLORS[i % COLORS.length]}"></i>${esc(L.nappy)}</span>`).join("");
+  $("legend1").innerHTML = legend; $("legend2").innerHTML = legend;
+  lineChart($("satChart"), labs, "sat", { min: 0, max: 1, ticks: { callback: v => Math.round(v * 100) + "%" }, title: { display: true, text: "Saturation" } });
+  lineChart($("humChart"), labs, "hum", { suggestedMin: 40, suggestedMax: 100, ticks: { callback: v => v + "%" }, title: { display: true, text: "Relative humidity" } });
+
+  // metrics table
+  const per = (L, k, unit, dd = 0) => L.insults.map(p => fmt(p[k], "", dd)).join(" / ") + (unit ? ` <small>${unit}</small>` : "");
+  const avg = (L, k) => { const v = L.insults.map(p => p[k]).filter(x => x !== null); return v.length ? v.reduce((a, b) => a + b) / v.length : null; };
+  const rows = [
+    ["Sensor placement", L => esc(L.placement)],
+    ["Time to soak away surface fluid, per insult", L => per(L, "absorb_s", "s")],
+    ["Time for the reading to rise, per insult", L => per(L, "rise_s", "s")],
+    ["Saturation added per insult", L => L.insults.map(p => fmt(p.step * 100, "", 0)).join(" / ") + " <small>points</small>"],
+    ["Insults until full (≥85%)", L => L.full_at_insult ? `${L.full_at_insult}` : `not full after ${L.insults.length}`],
+    ["Rewet under pressure", L => L.rewet === null ? "–" : `${fmt(L.rewet * 100)} <small>points</small>`],
+    ["Humidity rise 5 min after an insult", L => fmt(avg(L, "hum_rise"), "", 1) + " <small>% RH avg</small>"],
+    ["Time above 80% humidity", L => fmt(L.humid_minutes, "", 0) + " <small>min</small>"],
+  ];
+  $("metrics").innerHTML = `<thead><tr><th></th>${labs.map((L, i) => `<th style="color:${COLORS[i % COLORS.length]}">${esc(L.nappy)}</th>`).join("")}</tr></thead>
+    <tbody>${rows.map(([name, f]) => `<tr><td class="metric-name">${name}</td>${labs.map(L => `<td class="num">${f(L)}</td>`).join("")}</tr>`).join("")}</tbody>`;
+
+  // validation
+  const v = d.validation;
+  if (v.only_examples) $("trustWhy").textContent += " Figures below come from the simulated examples until real runs are recorded.";
+  $("trust").innerHTML = [
+    [v.accuracy !== null && v.accuracy !== undefined ? fmt(v.accuracy * 100, "%", 1) : "–", `of readings match the true state (dry, wet, soiled) across ${v.runs} runs`],
+    [fmt(v.wet_delay_s, " s"), "median time from pouring fluid to a confirmed wet"],
+    [fmt(v.poo_delay_s, " s"), "median time from the poo proxy to a confirmed poo"],
+    [`${v.false_alarms_movement ?? "–"}`, `false alarms in ${fmt(v.movement_minutes)} min of movement with no fluid`],
+  ].map(([val, k]) => `<div><div class="v">${val}</div><div class="k">${k}</div></div>`).join("");
+  $("runs").innerHTML = `<thead><tr><th>Run</th><th>Test</th><th>Placement</th><th class="num">Accuracy</th><th>Detection</th><th class="num">False alarms</th><th class="num">Wees seen</th></tr></thead><tbody>` +
+    d.runs.map(r => `<tr><td>${esc(r.nappy)} ${r.source === "simulated" ? '<span class="tag sim">simulated</span>' : '<span class="tag">bench</span>'}</td>
+      <td>${r.protocol}</td><td>${esc(r.placement)}</td><td class="num">${r.accuracy === null ? "–" : fmt(r.accuracy * 100, "%", 1)}</td>
+      <td>${r.delays.map(x => x.delay_s === null ? `${x.event}: missed` : `${x.event} in ${fmt(x.delay_s)} s`).join(", ") || "–"}</td>
+      <td class="num">${r.false_alarms}</td><td class="num">${r.protocol === "insult" ? `${r.wees_detected} of ${r.insults}` : "–"}</td></tr>`).join("") + "</tbody>";
+}
+
+fetch("/api/lab").then(r => r.json()).then(render)
+  .catch(() => { $("notice").hidden = false; $("notice").textContent = "Start the server with python server.py, then reload this page."; });
+</script>
+</body>
+</html>

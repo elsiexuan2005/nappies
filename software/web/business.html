@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PodCare: fleet insights</title>
+<style>
+  @font-face { font-family: "Fraunces"; src: url("/vendor/fraunces.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+  @font-face { font-family: "Figtree"; src: url("/vendor/figtree.woff2") format("woff2"); font-weight: 300 900; font-display: swap; }
+  :root {
+    --midnight: #1D2547; --lagoon: #3E8E9B; --apricot: #F2A65A; --rose: #E0605E;
+    --page: #F4F5FA; --panel: #FFFFFF; --ink: var(--midnight); --soft: #5D6584; --line: #E1E4EE;
+    --without: #B4BACB;
+    --display: "Fraunces", Georgia, serif; --ui: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--ui); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 44px 32px 60px; }
+
+  .masthead { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+  .brand { font-weight: 700; font-size: 15px; color: var(--lagoon); }
+  h1 { font-family: var(--display); font-weight: 500; font-size: 46px; line-height: 1.05; margin: 8px 0 10px; letter-spacing: -.015em; max-width: 16ch; font-variation-settings: "SOFT" 50, "opsz" 144; }
+  .lede { color: var(--soft); font-size: 17px; line-height: 1.5; max-width: 60ch; margin: 0; }
+  .switch a { color: var(--ink); font-weight: 600; font-size: 14px; text-decoration: none; border-bottom: 1.5px solid var(--lagoon); padding-bottom: 2px; }
+
+  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); margin: 36px 0 14px; background: var(--panel); border-radius: 20px; }
+  .kpi { padding: 22px 22px 20px; border-left: 1px solid var(--line); }
+  .kpi:first-child { border-left: 0; }
+  .kpi .v { font-family: var(--display); font-size: 36px; font-weight: 500; line-height: 1; font-variant-numeric: lining-nums tabular-nums; }
+  .kpi .v small { font-family: var(--ui); font-size: 15px; font-weight: 600; color: var(--soft); margin-left: 4px; }
+  .kpi .k { margin-top: 8px; font-size: 14px; line-height: 1.35; color: var(--soft); }
+  .kpi.lead .v { color: var(--lagoon); }
+
+  .grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; margin-top: 18px; }
+  .card { background: var(--panel); border-radius: 20px; padding: 24px 26px 22px; }
+  .card.span { grid-column: 1 / -1; }
+  .card h2 { font-family: var(--display); font-weight: 500; font-size: 23px; line-height: 1.2; margin: 0 0 6px; max-width: 34ch; font-variation-settings: "SOFT" 50; }
+  .card .why { color: var(--soft); font-size: 14px; line-height: 1.5; margin: 0 0 16px; max-width: 70ch; }
+  .card .use { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 14px; line-height: 1.5; }
+  .card .use b { color: var(--lagoon); font-weight: 700; }
+  .chart { position: relative; height: 260px; }
+
+  .legend { display: flex; gap: 18px; font-size: 13px; color: var(--soft); margin-bottom: 10px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+  .compare { display: grid; gap: 18px; }
+  .cmp-name { font-weight: 600; font-size: 15px; margin-bottom: 8px; }
+  .cmp-row { display: grid; grid-template-columns: 74px 1fr 56px; align-items: center; gap: 10px; font-size: 13px; color: var(--soft); margin: 4px 0; }
+  .cmp-row .track { height: 14px; border-radius: 7px; background: #EEF0F6; overflow: hidden; }
+  .cmp-row .fill { height: 100%; border-radius: 7px; }
+  .cmp-row .num { text-align: right; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  .calc { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; align-items: start; }
+  .inputs label { display: grid; grid-template-columns: 1fr auto; font-size: 14px; margin: 0 0 14px; gap: 6px 10px; }
+  .inputs output { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .inputs input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--lagoon); }
+  .inputs input:focus-visible { outline: 3px solid var(--lagoon); outline-offset: 4px; }
+  .result .big { font-family: var(--display); font-size: 52px; font-weight: 500; line-height: 1; color: var(--lagoon); }
+  .result .cap { color: var(--soft); font-size: 14px; margin: 8px 0 20px; line-height: 1.45; }
+  .result table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .result td { padding: 8px 0; border-top: 1px solid var(--line); }
+  .result td:last-child { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .assume { margin-top: 26px; color: var(--soft); font-size: 13px; line-height: 1.6; }
+  .assume h3 { font-size: 14px; color: var(--ink); margin: 0 0 6px; }
+  .assume ul { margin: 0; padding-left: 18px; columns: 2; column-gap: 40px; }
+
+  @media (max-width: 960px) {
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .kpi { border-left: 0; border-top: 1px solid var(--line); }
+    .kpi:nth-child(-n+2) { border-top: 0; }
+    .grid, .calc { grid-template-columns: 1fr; }
+    .assume ul { columns: 1; }
+    h1 { font-size: 36px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <div>
+      <div class="brand">PodCare for P&amp;G</div>
+      <h1 id="title">What connected diapers tell us</h1>
+      <p class="lede" id="lede">Loading fleet…</p>
+    </div>
+    <nav class="switch"><a href="/lab">Product Lab</a> <a href="/" style="margin-left:18px">Parent app</a></nav>
+  </header>
+
+  <section class="kpis" id="kpis" aria-label="Headline numbers"></section>
+
+  <div class="grid">
+    <article class="card">
+      <h2 id="fitTitle">Leaks rise sharply once a baby outgrows its size</h2>
+      <p class="why">Leaks per 100 diapers against the baby's weight as a share of the size's upper limit, for families without the pod.</p>
+      <div class="chart"><canvas id="fitChart"></canvas></div>
+      <p class="use"><b>How P&amp;G uses it:</b> send a size-up nudge with a sample of the next size before leaks start, at 90% of the weight limit.</p>
+    </article>
+
+    <article class="card">
+      <h2 id="nightTitle">Overnight fill by size</h2>
+      <p class="why">Share of nights where the diaper reached 85% of its capacity before morning.</p>
+      <div class="chart"><canvas id="nightChart"></canvas></div>
+      <p class="use"><b>How P&amp;G uses it:</b> real-world overnight data shows R&amp;D which sizes need more night-time absorbency, and backs claims like "12-hour protection".</p>
+    </article>
+
+    <article class="card">
+      <h2 id="fcTitle">Diapers needed over the next four weeks</h2>
+      <p class="why">Projected from each baby's growth and size-up timing. Stacked by size.</p>
+      <div class="chart"><canvas id="fcChart"></canvas></div>
+      <p class="use"><b>How P&amp;G uses it:</b> auto-replenishment ships the right size before the family runs out, and the size mix feeds supply planning.</p>
+    </article>
+
+    <article class="card">
+      <h2>What changes for families with the pod</h2>
+      <p class="why">The same babies, simulated with and without pod alerts.</p>
+      <div class="legend"><span><i style="background:var(--without)"></i>Without pod</span><span><i style="background:var(--lagoon)"></i>With pod</span></div>
+      <div class="compare" id="compare"></div>
+      <p class="use"><b>How P&amp;G uses it:</b> fewer leaks and less time in a soiled diaper make parents more loyal to the brand. That's the case for the subscription.</p>
+    </article>
+
+    <article class="card span">
+      <h2>Subscription revenue from better retention</h2>
+      <p class="why">Change the assumptions to see what keeping families subscribed for longer is worth over 12 months.</p>
+      <div class="calc">
+        <div class="inputs">
+          <label>Households with a pod <output id="o_hh"></output><input type="range" id="hh" min="10000" max="1000000" step="10000" value="200000"></label>
+          <label>Subscription spend per month <output id="o_spend"></output><input type="range" id="spend" min="20" max="80" step="1" value="42"></label>
+          <label>Monthly cancellations without pod <output id="o_c0"></output><input type="range" id="c0" min="2" max="15" step="0.5" value="8"></label>
+          <label>Monthly cancellations with pod <output id="o_c1"></output><input type="range" id="c1" min="1" max="15" step="0.5" value="5"></label>
+          <label>Pod price <output id="o_pod"></output><input type="range" id="pod" min="0" max="60" step="1" value="0"></label>
+        </div>
+        <div class="result">
+          <div class="big" id="r_big">–</div>
+          <div class="cap">extra revenue in 12 months from families staying subscribed longer, plus pod sales</div>
+          <table>
+            <tr><td>Months subscribed per family, without pod</td><td id="r_m0"></td></tr>
+            <tr><td>Months subscribed per family, with pod</td><td id="r_m1"></td></tr>
+            <tr><td>Extra diaper revenue per family</td><td id="r_per"></td></tr>
+            <tr><td>Pod revenue</td><td id="r_pod"></td></tr>
+          </table>
+        </div>
+      </div>
+    </article>
+  </div>
+
+  <section class="assume">
+    <h3>Assumptions</h3>
+    <ul id="assume"></ul>
+  </section>
+</div>
+
+<script src="/vendor/chart.umd.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const nf = new Intl.NumberFormat("en-GB");
+const gbp = v => "£" + (v >= 1e6 ? (v / 1e6).toFixed(1) + "m" : v >= 1e3 ? Math.round(v / 1e3) + "k" : Math.round(v));
+const LAGOON = "#3E8E9B", MID = "#1D2547", APRICOT = "#F2A65A", WITHOUT = "#B4BACB";
+const SIZE_COLORS = ["#B9DEE0", "#7DBFC6", "#3E8E9B", "#2B6380", "#1D2547"];
+Chart.defaults.font.family = "Figtree"; Chart.defaults.font.size = 12; Chart.defaults.color = "#5D6584";
+Chart.defaults.plugins.legend.display = false;
+const grid = { color: "#EEF0F6" }, noGrid = { display: false };
+
+// draws a labelled vertical marker at x (category label)
+const marker = (xLabel, text) => ({
+  id: "marker",
+  afterDatasetsDraw(c) {
+    const x = c.scales.x.getPixelForValue(c.data.labels.indexOf(xLabel));
+    if (isNaN(x) || x < 0) return;
+    const { top, bottom } = c.chartArea, ctx = c.ctx;
+    ctx.save(); ctx.strokeStyle = APRICOT; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
+    ctx.setLineDash([]); ctx.fillStyle = MID; ctx.font = "600 12px Figtree"; ctx.textAlign = "right";
+    ctx.fillText(text, x - 8, top + 12); ctx.restore();
+  }
+});
+
+function render(d) {
+  const k = d.kpis, f = d.fleet;
+  $("title").textContent = `What ${nf.format(f.pods)} connected diapers tell us`;
+  $("lede").textContent = `${nf.format(f.diapers_tracked)} diaper changes over ${f.weeks} weeks from a simulated fleet of babies aged 0–10 months. Each insight below is something P&G can act on.`;
+  const lv = d.live;
+  if (lv && lv.devices_24h) {
+    $("lede").textContent += ` Live: ${lv.devices_24h} connected ${lv.devices_24h === 1 ? "pod" : "pods"} reporting anonymised summaries` +
+      (lv.avg_healthy_pct != null ? `, average healthy diaper time ${Math.round(lv.avg_healthy_pct * 100)}%.` : ".");
+  }
+
+  const soiled = d.compare[2];
+  $("kpis").innerHTML = [
+    ["lead", `−${k.leak_reduction_pct}%`, "", `leaks with the pod (${k.leaks_per_1000_with} vs ${k.leaks_per_1000_without} per 1,000 diapers)`],
+    ["", nf.format(k.sizeup_next_14d), "", "babies due a size-up in the next 14 days"],
+    ["", Math.round(k.forecast_4w / 1000), "k", "diapers needed in the next four weeks"],
+    ["", k.avg_night_fill_pct, "%", "typical overnight fill, so most nights have headroom"],
+    ["", Math.round(soiled.with), "min", `a day in a soiled diaper, down from ${Math.round(soiled.without)}`],
+  ].map(([cls, v, unit, label]) => `<div class="kpi ${cls}"><div class="v">${v}<small>${unit}</small></div><div class="k">${label}</div></div>`).join("");
+
+  // fit curve
+  $("fitTitle").textContent = `Leaks rise ${d.fit_multiplier}× once a baby outgrows its size`;
+  const labels = d.fit_curve.map(p => p.fit + "%");
+  new Chart($("fitChart"), {
+    type: "line",
+    data: { labels, datasets: [{ data: d.fit_curve.map(p => p.leaks_per_100), borderColor: MID, borderWidth: 2.5, pointRadius: 3, pointBackgroundColor: MID, tension: .3, fill: { target: "origin", above: "rgba(29,37,71,.06)" } }] },
+    options: { maintainAspectRatio: false, animation: false,
+      scales: { x: { grid: noGrid, title: { display: true, text: "Baby's weight as % of the size limit" } },
+                y: { grid, beginAtZero: true, title: { display: true, text: "Leaks per 100 diapers" } } },
+      plugins: { tooltip: { callbacks: { label: c => `${c.parsed.y} leaks per 100 diapers` } } } },
+    plugins: [marker(labels.find(l => parseInt(l) >= 90), "Pod suggests size-up")]
+  });
+
+  // overnight fill
+  const w = d.night_worst;
+  $("nightTitle").textContent = `Size ${w.size} runs closest to capacity overnight`;
+  new Chart($("nightChart"), {
+    type: "bar",
+    data: { labels: d.night_fill.map(n => `Size ${n.size}`), datasets: [{ data: d.night_fill.map(n => n.pct_over_85),
+      backgroundColor: d.night_fill.map(n => n.size === w.size ? APRICOT : "#C9CEDD"), borderRadius: 8, maxBarThickness: 64 }] },
+    options: { maintainAspectRatio: false, animation: false,
+      scales: { x: { grid: noGrid }, y: { grid, beginAtZero: true, ticks: { callback: v => v + "%" }, title: { display: true, text: "Nights over 85% full" } } },
+      plugins: { tooltip: { callbacks: { label: c => `${c.parsed.y}% of nights over 85% full` } } } }
+  });
+
+  // forecast
+  const sizes = [1, 2, 3, 4, 5].filter(s => d.forecast.some(wk => wk["s" + s] > 0));
+  new Chart($("fcChart"), {
+    type: "bar",
+    data: { labels: d.forecast.map(wk => wk.week),
+      datasets: sizes.map(s => ({ label: `Size ${s}`, data: d.forecast.map(wk => wk["s" + s]), backgroundColor: SIZE_COLORS[s - 1], borderRadius: 4, maxBarThickness: 70 })) },
+    options: { maintainAspectRatio: false, animation: false,
+      scales: { x: { stacked: true, grid: noGrid }, y: { stacked: true, grid, ticks: { callback: v => Math.round(v / 1000) + "k" } } },
+      plugins: { legend: { display: true, position: "bottom", labels: { boxWidth: 10, boxHeight: 10, useBorderRadius: true, borderRadius: 3 } },
+                 tooltip: { callbacks: { label: c => `${c.dataset.label}: ${nf.format(c.parsed.y)}` } } } }
+  });
+
+  // compare
+  $("compare").innerHTML = d.compare.map(c => {
+    const max = Math.max(c.without, c.with) || 1;
+    const row = (name, v, col) => `<div class="cmp-row"><span>${name}</span><div class="track"><div class="fill" style="width:${v / max * 100}%;background:${col}"></div></div><span class="num">${v}</span></div>`;
+    return `<div><div class="cmp-name">${c.metric}</div>${row("Without", c.without, WITHOUT)}${row("With pod", c.with, LAGOON)}</div>`;
+  }).join("");
+
+  $("assume").innerHTML = d.assumptions.concat([
+    "Retention calculator values are inputs to change, not results from the simulation."
+  ]).map(a => `<li>${a}</li>`).join("");
+}
+
+// retention calculator
+function months(churnPct) { let m = 0, s = 1; for (let i = 0; i < 12; i++) { m += s; s *= 1 - churnPct / 100; } return m; }
+function calc() {
+  const hh = +$("hh").value, spend = +$("spend").value, c0 = +$("c0").value, c1 = +$("c1").value, pod = +$("pod").value;
+  $("o_hh").textContent = nf.format(hh); $("o_spend").textContent = "£" + spend;
+  $("o_c0").textContent = c0 + "%"; $("o_c1").textContent = c1 + "%"; $("o_pod").textContent = pod ? "£" + pod : "Free with subscription";
+  const m0 = months(c0), m1 = months(c1), per = (m1 - m0) * spend;
+  $("r_m0").textContent = m0.toFixed(1); $("r_m1").textContent = m1.toFixed(1);
+  $("r_per").textContent = "£" + Math.round(per); $("r_pod").textContent = gbp(hh * pod);
+  $("r_big").textContent = gbp(hh * per + hh * pod);
+}
+["hh", "spend", "c0", "c1", "pod"].forEach(id => $(id).addEventListener("input", calc));
+calc();
+
+fetch("/api/business").then(r => r.json()).then(render)
+  .catch(() => { $("lede").textContent = "Start the server with python server.py, then reload this page."; });
+</script>
+</body>
+</html>

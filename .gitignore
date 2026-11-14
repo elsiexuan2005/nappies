@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Generated files (re-create with the commands in software/README.md)
+software/models.joblib
+software/training_data.csv
+software/models_report.txt
+software/synthetic_sample.csv
+software/validation_report.md
+software/calibration.json
+software/captures/
+software/bench/plots/
+software/bench/examples/
+software/cloud_data/
+software/edge_data/

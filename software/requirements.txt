@@ -1,0 +1,7 @@
+numpy
+pandas
+scikit-learn
+joblib
+pyserial
+paho-mqtt>=2.0
+matplotlib

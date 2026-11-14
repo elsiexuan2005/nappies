@@ -1,0 +1,29 @@
+# Cloud API gateway. Replace ":80" with a domain (e.g. podcare.example.com) to get automatic HTTPS.
+:80 {
+	handle /v1/models* {
+		reverse_proxy model-registry:9004
+	}
+	handle /v1/* {
+		reverse_proxy ingest:9001
+	}
+	handle /lab* {
+		reverse_proxy lab:9003
+	}
+	handle /api/lab* {
+		reverse_proxy lab:9003
+	}
+	handle {
+		reverse_proxy fleet:9002
+	}
+}
+
+# Edge hubs use these ports by default (CLOUD_URL / REGISTRY_URL), so expose them too.
+:9001 {
+	handle /v1/models* {
+		reverse_proxy model-registry:9004
+	}
+	reverse_proxy ingest:9001
+}
+:9004 {
+	reverse_proxy model-registry:9004
+}
