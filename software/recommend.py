@@ -2,10 +2,12 @@
 import config as C
 
 
-def recommend(state, sat, p_leak60, ttl_min, still_frac):
+def recommend(state, sat, p_leak60, ttl_min, still_frac, outer_leak=False):
     asleep = still_frac > 0.8
     if state == "soiled":
         return "CHANGE NOW", "Soiled diaper detected", "red"
+    if outer_leak:
+        return "CHANGE NOW", "Leak detected outside the nappy", "red"
     if sat >= C.LEAK_SAT or p_leak60 > 0.7:
         return "CHANGE NOW", "Leak risk: diaper is nearly full", "red"
     if state == "wet":

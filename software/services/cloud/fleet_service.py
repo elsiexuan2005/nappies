@@ -1,8 +1,9 @@
 """CLOUD · fleet: the P&G business dashboard and its API.
 Combines the simulated fleet projection with live roll-ups from connected hubs (via ingest).
+The "live" block includes Tiger Data hourly continuous aggregates when ingest has DATABASE_URL set.
 
   GET /business        dashboard page
-  GET /api/business    fleet insights + "live" block from ingest
+  GET /api/business    fleet insights + "live" block from ingest (/v1/aggregate)
 
 env: PORT=9002  INGEST_URL=http://localhost:9001  FLEET_N=3000
 """

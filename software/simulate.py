@@ -190,6 +190,7 @@ class SimPod:
 
     def change(self):
         self.vol, self.voids, self.poo_t, self.first_void = 0.0, [], None, None
+        self.outer_leak = False
         base = self.capacity_ml or C.DIAPER_CAPACITY_ML[self.size]
         self.cap = base * (1.0 if self.capacity_ml else self.rng.uniform(0.9, 1.1))
         self.gain = 1.0 if self.capacity_ml else self.rng.uniform(0.9, 1.1)
@@ -207,6 +208,10 @@ class SimPod:
     def poo(self):
         if self.poo_t is None:
             self.poo_t = self.t
+
+    def leak(self):
+        """Simulate water outside the nappy (outer leak probe)."""
+        self.outer_leak = True
 
     def step(self):
         if self.auto:
@@ -240,11 +245,14 @@ class SimPod:
         else:
             self._temp += (self.room_temp - self._temp) / 900 + self.rng.normal(0, 0.003)   # room drifts slowly
             self._hum += (50 - (self._temp - 19) * 2 - self._hum) / 900 + self.rng.normal(0, 0.01)
+        leak_raw = float(raw_from_sat(np.array([0.95 if self.outer_leak else 0.0]), self.cal)[0]
+                         + self.rng.normal(0, self.cal["moisture"]["noise"]))
         row = {"t": float(self.t),
                "temp": round(self._temp + self.rng.normal(0, 0.1), 1), "hum": round(min(99.0, self._hum + self.rng.normal(0, 0.3)), 1),
                "moisture": float(moisture_raw(np.array([sat_sensor]), self.cal, self.rng)[0]),
                "gas": float(gas_raw(np.array([gn]), self.cal, self.rng)[0]),
-               "acc_mean": float(am[0]), "acc_std": float(asd[0]), "gyro_mean": float(gy[0])}
+               "acc_mean": float(am[0]), "acc_std": float(asd[0]), "gyro_mean": float(gy[0]),
+               "leak_detected": bool(self.outer_leak), "leak_raw": leak_raw}
         self.t += 1
         return row
 

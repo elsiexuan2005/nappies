@@ -5,3 +5,4 @@ joblib
 pyserial
 paho-mqtt>=2.0
 matplotlib
+psycopg[binary]>=3.1

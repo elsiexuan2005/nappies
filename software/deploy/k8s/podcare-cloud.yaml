@@ -14,6 +14,8 @@ metadata: { name: podcare-secrets, namespace: podcare }
 type: Opaque
 stringData:
   API_KEY: change-me
+  # Optional Tiger Cloud URL (leave empty to use SQLite under CLOUD_DATA)
+  DATABASE_URL: ""
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -33,7 +35,7 @@ spec:
   resources: { requests: { storage: 10Gi } }
   # storageClassName: efs-sc | azurefile | filestore-rwx
 ---
-# ---------- ingest (single writer while on SQLite; switch to managed Postgres to scale out)
+# ---------- ingest (SQLite by default; set secret DATABASE_URL for Tiger Cloud)
 apiVersion: apps/v1
 kind: Deployment
 metadata: { name: ingest, namespace: podcare }

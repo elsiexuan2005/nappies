@@ -12,11 +12,11 @@ import numpy as np
 # Placeholder values so everything runs before you calibrate.
 # Replace by running: python calibrate.py captures/*.csv
 # Defaults assume the team's Arduino UNO Q (12-bit ADC, 0-4095, 3.3 V reference).
-# Moisture = DFRobot SEN0193 capacitive v2 wiki voltages (dry ~2.5 V, in water ~1.3 V)
-# scaled to 12-bit. Lower reading = wetter. Gas values are rough guesses - calibrate!
-# (Classic 5 V Uno, 10-bit: roughly dry 520 / wet 260 - calibration handles either.)
+# This board's moisture probe reads LOW in air (~165) and HIGHER in water
+# (opposite of DFRobot SEN0193 wiki). sat_from_raw handles either polarity.
+# Gas values are rough guesses - calibrate!
 DEFAULT_CAL = {
-    "moisture": {"dry": 3150.0, "wet50": 2360.0, "wet100": 1580.0, "noise": 12.0},
+    "moisture": {"dry": 150.0, "wet50": 900.0, "wet100": 1600.0, "noise": 12.0},
     "gas": {"base": 600.0, "voc": 1800.0, "noise": 8.0},
     "imu": {"still_acc_std": 0.004, "active_acc_std": 0.15,
             "still_gyro": 0.6, "active_gyro": 45.0},

@@ -7,7 +7,7 @@ no personal data.
 
 | Folder | What's inside |
 |---|---|
-| `hardware/` | Arduino sketches. `moisture_sensor/`, `gas_sensor/`, `record_sensor.py`: the original single-sensor sketches and recorder. `pod_sensors/`: UNO Q sketch reading moisture + gas + DHT11 together. `nicla_imu/`: Nicla Vision motion sensor (IMU), the one we use. `nicla_vision/`: earlier camera experiments (not used). `../data/`: recordings |
+| `hardware/` | Arduino sketches. `moisture_sensor/`, `gas_sensor/`, `record_sensor.py`: the original single-sensor sketches and recorder. `pod_sensors/`: UNO Q sketch reading moisture + gas + DHT11 together. `leak_detection/`: outer-nappy leak probe + LED (separate board). `nicla_imu/`: Nicla Vision motion sensor (IMU), the one we use. `nicla_vision/`: earlier camera experiments (not used). `../data/`: recordings |
 | `software/` | Python: models, dashboards (parent app, business, Product Lab), bench protocol + validation, edge/cloud microservices, Docker/Kubernetes deployment |
 
 Start here: [`software/README.md`](software/README.md). For the architecture and edge/cloud split, see

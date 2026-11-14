@@ -17,11 +17,21 @@
 //
 // Libraries: "DHT sensor library" by Adafruit (+ "Adafruit Unified Sensor"). The DHT11 uses
 // tight bit timing; if it doesn't read on the UNO Q core, set USE_DHT 0 - everything else still works.
+//
+// Alert LED (optional): lights when fill is in the red zone (sat >= ~0.85) or when the laptop
+// sends {"led":true}. Default pin is D3 so it does not clash with DHT11 on D2. If your LED is
+// on D2, set USE_DHT 0 and LED_PIN 2.
 
 #define USE_DHT 1
+#define USE_LED 1
 const int MOISTURE_PIN = A0;
 const int GAS_PIN = A1;
 const int DHT_PIN = 2;
+const int LED_PIN = 3;                 // use 2 only if USE_DHT is 0
+
+// Raw moisture at "red" fill (~85% sat). Team cal: dry 150, wet100 1600 → ~1382.
+const int RED_MOISTURE = 1380;
+const int DRY_MOISTURE = 150;          // for polarity (wet higher vs lower)
 
 #if USE_DHT
 #include <DHT.h>
@@ -34,6 +44,7 @@ const unsigned long DHT_MS = 2000;     // DHT11 needs >= 1-2 s between reads
 
 unsigned long mSum = 0, gSum = 0, n = 0;
 float tempC = NAN, hum = NAN;
+bool softwareLed = false;
 
 void setup() {
   Serial.begin(115200);
@@ -43,15 +54,33 @@ void setup() {
 #if USE_DHT
   dht.begin();
 #endif
+#if USE_LED
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
+#endif
 }
 
 void printNum(float v, int digits) {
   if (isnan(v)) Serial.print("null"); else Serial.print(v, digits);
 }
 
+void pollLedCommand() {
+  while (Serial.available() > 0) {
+    String line = Serial.readStringUntil('\n');
+    line.trim();
+    if (line.indexOf("\"led\":true") >= 0 || line.indexOf("\"led\": true") >= 0) {
+      softwareLed = true;
+    } else if (line.indexOf("\"led\":false") >= 0 || line.indexOf("\"led\": false") >= 0) {
+      softwareLed = false;
+    }
+  }
+}
+
 void loop() {
   static unsigned long lastSample = 0, lastReport = 0, lastDht = 0;
   unsigned long now = millis();
+
+  pollLedCommand();
 
   if (now - lastSample >= SAMPLE_MS) {
     lastSample = now;
@@ -71,10 +100,11 @@ void loop() {
 
   if (now - lastReport >= REPORT_MS && n > 0) {
     lastReport = now;
+    float moisture = (float)mSum / n;
     Serial.print("{\"timestamp_ms\":");
     Serial.print(now);
     Serial.print(",\"sensor_raw\":");
-    Serial.print((float)mSum / n, 1);
+    Serial.print(moisture, 1);
     Serial.print(",\"gas_raw\":");
     Serial.print((float)gSum / n, 1);
     Serial.print(",\"temp_c\":");
@@ -82,6 +112,11 @@ void loop() {
     Serial.print(",\"humidity\":");
     printNum(hum, 1);
     Serial.println("}");
+#if USE_LED
+    bool wetHigh = (RED_MOISTURE > DRY_MOISTURE) ? (moisture >= RED_MOISTURE)
+                                                 : (moisture <= RED_MOISTURE);
+    digitalWrite(LED_PIN, (wetHigh || softwareLed) ? HIGH : LOW);
+#endif
     mSum = gSum = n = 0;
   }
 }

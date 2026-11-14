@@ -11,7 +11,7 @@ Events are detected from the model outputs:
   poo    - diaper state becomes "soiled"
   change - "I changed the diaper" button, or the sensor reads dry again after being wet
   sleep  - Nicla IMU still for most of the last 10 min
-Activity: every minute is classed asleep / calm / active from the IMU, which feeds
+Activity: every 5 s is classed asleep / calm / active from the IMU, which feeds
 the day strip, sleep stretches, naps and "wake-ups after a wet or dirty diaper".
 DHT11 (about ±2 °C, ±5 % RH), two placements:
   nappy (default) - inside the nappy at the waistband: skin-side microclimate. Long spells above
@@ -40,6 +40,8 @@ WEE_JUMP = 0.04          # fill high-water mark jump that counts as a wee
 WEE_REFRACTORY_S = 180
 HUMID_RH = 85            # ASSUMPTION: inside-nappy humidity treated as "humid"
 HUMID_LONG_MIN = 30      # ASSUMPTION: humid this long in one diaper -> higher irritation risk
+SLOT_S = 5               # activity strip resolution (seconds)
+ACT_NAMES = ("asleep", "calm", "active")
 
 
 def _new_session(t):
@@ -68,7 +70,8 @@ class Engine:
         self.buf, self.events, self.sessions = [], [], []
         self.cur = _new_session(self.clock)
         self.sleep_s, self.asleep, self.seeded = 0.0, None, False
-        self.minute_levels, self._macc = {}, {}      # minute -> 0 asleep / 1 calm / 2 active
+        self.leak_detected, self.leak_raw = False, None
+        self.slot_levels, self._sacc = {}, {}        # 5s slot -> 0 asleep / 1 calm / 2 active
         self.minute_temp, self._tacc = {}, {}        # minute -> mean room temperature
         self._env = deque(maxlen=120)                # recent (temp, hum) readings
         i = self.cal["imu"]
@@ -94,20 +97,20 @@ class Engine:
             end = min(t + dur, self.clock - 600)
             if asleep:
                 self.sleep_s += end - t
-            m0, m1 = int(t // 60), int(end // 60)
+            s0, s1 = int(t // SLOT_S), int(end // SLOT_S)
             lvl = 1
-            for m in range(m0, m1):
-                if not asleep and rng.random() < 1 / 10:     # bouts of several minutes
+            for s in range(s0, s1):
+                if not asleep and rng.random() < 1 / (10 * 60 / SLOT_S):  # bouts of activity while awake
                     lvl = int(rng.choice([1, 2], p=[0.6, 0.4]))
-                self.minute_levels[m] = 0 if asleep else lvl
+                self.slot_levels[s] = 0 if asleep else lvl
             self.events.append({"t": t, "type": "sleep" if asleep else "wake"})
             t, asleep = end, not asleep
         for m in range(int(start // 60), int(self.clock // 60)):        # room: cool overnight, warmer by day
             h = ((m * 60 - start) / 3600)
             self.minute_temp[m] = 18.8 + 1.2 * np.sin(h / hours * np.pi) + rng.normal(0, 0.15)
         self.asleep = not asleep  # state of the last block
-        for m in range(int((self.clock - 600) // 60), int(self.clock // 60)):
-            self.minute_levels[m] = 0 if self.asleep else 1
+        for s in range(int((self.clock - 600) // SLOT_S), int(self.clock // SLOT_S)):
+            self.slot_levels[s] = 0 if self.asleep else 1
         # diapers
         t = start
         while t < self.clock - 1800:
@@ -152,6 +155,8 @@ class Engine:
                 self.pod.wee()
             elif self.mode == "sim" and name == "poo":
                 self.pod.poo()
+            elif self.mode == "sim" and name == "leak":
+                self.pod.leak()
             elif self.mode == "sim" and name == "asleep":
                 self.pod.asleep = bool(value)
             elif self.mode == "sim" and name == "room_temp":
@@ -168,6 +173,7 @@ class Engine:
         self.events.append({"t": self.clock, "type": "change"})
         self.cur = _new_session(self.clock)
         self.buf = []
+        self.leak_detected, self.leak_raw = False, None
         if self.pod:
             self.pod.change()
 
@@ -213,7 +219,10 @@ class Engine:
             if self.buf:
                 self.clock = self.buf[-1]["t"]
             self._climate(rows)
+            self._update_leak(rows)
             if len(self.buf) < 30 or not rows:
+                if self.ps:
+                    self.ps.set_alert_led(False)
                 self.state = self._build(None)
                 return
             df = pd.DataFrame(self.buf)
@@ -259,28 +268,64 @@ class Engine:
             # auto change: wet diaper -> sensor reads dry again
             if s["max_sat"] > 0.3 and len(sats) and float(f["sat"].iloc[-20:].max()) < 0.05:
                 self._change()
+                if self.ps:
+                    self.ps.set_alert_led(False)
                 self.state = self._build(None)
                 return
 
+            last_acc = float(df["acc_std"].to_numpy()[-1])
+            last_gyro = float(df["gyro_mean"].to_numpy()[-1])
+            if not np.isfinite(last_acc):
+                last_acc = 0.0
+            if not np.isfinite(last_gyro):
+                last_gyro = 0.0
+            if asleep:
+                act_lvl = 0
+            elif last_acc < self.calm_thr:
+                act_lvl = 1
+            else:
+                act_lvl = 2
             now = {"state": state, "probs": {self.M["states"][int(k)]: float(p)
                                              for k, p in zip(self.M["state"].classes_, probs)},
                    "sat": sat, "p_full_1h": p_full, "ttl_min": ttl, "asleep": asleep,
-                   "moving": bool(self.M["act"].predict(last[F["act"]])[0])}
-            title, detail, color = recommend(state, sat, p_full, ttl, still_frac)
+                   "moving": bool(self.M["act"].predict(last[F["act"]])[0]),
+                   "activity": ACT_NAMES[act_lvl], "activity_level": act_lvl,
+                   "acc_std": last_acc, "gyro_mean": last_gyro,
+                   "leak_detected": bool(self.leak_detected), "leak_raw": self.leak_raw}
+            title, detail, color = recommend(state, sat, p_full, ttl, still_frac,
+                                             outer_leak=self.leak_detected)
             now["rec"] = {"title": title, "detail": detail, "level": color}
+            if self.ps:
+                self.ps.set_alert_led(color == "red")
             step = max(1, len(f) // 200)
             series = {"mins": f["mins"].iloc[::step].round(1).tolist(),
                       "sat": f["sat"].iloc[::step].round(3).tolist(),
                       "gas": f["gas_rise"].iloc[::step].round(3).tolist()}
             self.state = self._build(now, series)
 
+    def _update_leak(self, rows):
+        """Outer-leak probe from leak_detection.ino (or SimPod). Rising edge -> timeline event."""
+        if not rows:
+            return
+        prev = self.leak_detected
+        last = rows[-1]
+        flag = bool(last.get("leak_detected"))
+        raw = last.get("leak_raw")
+        self.leak_detected = flag
+        if raw is not None and np.isfinite(raw):
+            self.leak_raw = float(raw)
+        elif not flag:
+            self.leak_raw = None
+        if flag and not prev:
+            self.events.append({"t": self.clock, "type": "leak"})
+
     def _activity(self, ts, still_frac, acc_std):
         lvl = np.where(still_frac > 0.8, 0, np.where(acc_std < self.calm_thr, 1, 2))
         for t_, l in zip(ts, lvl):
-            self._macc.setdefault(int(t_ // 60), [0, 0, 0])[int(l)] += 1
-        cur = int(self.clock // 60)
-        for m in [m for m in self._macc if m < cur]:
-            self.minute_levels[m] = int(np.argmax(self._macc.pop(m)))
+            self._sacc.setdefault(int(t_ // SLOT_S), [0, 0, 0])[int(l)] += 1
+        cur = int(self.clock // SLOT_S)
+        for s in [s for s in self._sacc if s < cur]:
+            self.slot_levels[s] = int(np.argmax(self._sacc.pop(s)))
 
     def _climate(self, rows):
         for r in rows:
@@ -326,33 +371,50 @@ class Engine:
             st = ("alert", "Too warm", "Overheating raises SIDS risk. Open a door or window and remove layers.")
         hum_note = " Air is dry." if hum < 30 else (" Air is humid." if hum > 70 else "")
         m0 = int(self.day_start // 60)
-        asleep_m = [m for m, l in self.minute_levels.items() if l == 0 and m >= m0 and m in self.minute_temp]
+        asleep_m = set()
+        for slot, l in self.slot_levels.items():
+            if l != 0:
+                continue
+            m = int((slot * SLOT_S) // 60)
+            if m >= m0 and m in self.minute_temp:
+                asleep_m.add(m)
         in_range = (sum(16 <= self.minute_temp[m] <= 20 for m in asleep_m) / len(asleep_m)) if asleep_m else None
         return {"connected": True, "mode": "room", "temp": temp, "hum": hum, "level": st[0], "label": st[1],
                 "detail": st[2] + hum_note, "sleep_in_range": in_range}
 
+    def _levels_with_open(self):
+        """Finalized 5s slots plus the in-progress slot's majority vote."""
+        levels = dict(self.slot_levels)
+        cur = int(self.clock // SLOT_S)
+        if cur in self._sacc:
+            levels[cur] = int(np.argmax(self._sacc[cur]))
+        return levels
+
     def _sleep_stats(self):
-        """Sleep stretches from minute levels (awake gaps < 3 min don't break a stretch)."""
-        if not self.minute_levels:
+        """Sleep stretches from 5s activity slots (awake gaps < 3 min don't break a stretch)."""
+        levels = self._levels_with_open()
+        if not levels:
             return {"runs": [], "sleep_min": 0, "calm_min": 0, "active_min": 0, "naps": 0,
                     "longest_min": 0, "wakes": [], "current": None}
-        m0 = int(self.day_start // 60)
-        mins = [m for m in sorted(self.minute_levels) if m >= m0]
-        lv = [self.minute_levels[m] for m in mins]
+        s0 = int(self.day_start // SLOT_S)
+        slots = [s for s in sorted(levels) if s >= s0]
+        lv = [levels[s] for s in slots]
         runs = []                                   # day strip: merged runs of same level
-        for m, l in zip(mins, lv):
-            if runs and runs[-1]["level"] == l and m == runs[-1]["end"]:
-                runs[-1]["end"] = m + 1
+        for s, l in zip(slots, lv):
+            if runs and runs[-1]["level"] == l and s == runs[-1]["end"]:
+                runs[-1]["end"] = s + 1
             else:
-                runs.append({"start": m, "end": m + 1, "level": l})
+                runs.append({"start": s, "end": s + 1, "level": l})
         asleep = [l == 0 for l in lv]
-        i, n = 0, len(asleep)                       # fill short awake gaps inside sleep
+        gap_slots = max(1, 3 * 60 // SLOT_S)        # ~3 min awake gaps inside sleep
+        min_sleep_slots = max(1, 10 * 60 // SLOT_S) # ~10 min counts as a nap
+        i, n = 0, len(asleep)
         while i < n:
             if not asleep[i]:
                 j = i
                 while j < n and not asleep[j]:
                     j += 1
-                if 0 < i and j < n and j - i < 3:
+                if 0 < i and j < n and j - i < gap_slots:
                     for k in range(i, j):
                         asleep[k] = True
                 i = j
@@ -363,21 +425,24 @@ class Engine:
             if a and start is None:
                 start = k
             elif not a and start is not None:
-                if k - start >= 10:
-                    stretches.append((mins[start], mins[k - 1] + 1))
+                if k - start >= min_sleep_slots:
+                    stretches.append((slots[start], slots[k - 1] + 1))
                 start = None
-        wakes = [e for _, e in stretches if e < mins[-1]]
+        wakes = [e for _, e in stretches if e < slots[-1]]
         cur_state = "asleep" if asleep[-1] else "awake"
         k = n - 1
         while k > 0 and asleep[k - 1] == asleep[-1]:
             k -= 1
+        to_min = SLOT_S / 60.0
         return {
-            "runs": [{"start": r["start"] * 60, "end": r["end"] * 60, "level": r["level"]} for r in runs],
-            "sleep_min": sum(l == 0 for l in lv), "calm_min": sum(l == 1 for l in lv),
-            "active_min": sum(l == 2 for l in lv), "naps": len(stretches),
-            "longest_min": max([e - s_ for s_, e in stretches], default=0),
-            "wakes": [w * 60 for w in wakes],
-            "current": {"state": cur_state, "minutes": n - k},
+            "runs": [{"start": r["start"] * SLOT_S, "end": r["end"] * SLOT_S, "level": r["level"]} for r in runs],
+            "sleep_min": sum(l == 0 for l in lv) * to_min,
+            "calm_min": sum(l == 1 for l in lv) * to_min,
+            "active_min": sum(l == 2 for l in lv) * to_min,
+            "naps": len(stretches),
+            "longest_min": max([(e - s_) * to_min for s_, e in stretches], default=0),
+            "wakes": [w * SLOT_S for w in wakes],
+            "current": {"state": cur_state, "minutes": (n - k) * to_min},
         }
 
     # ------------------------------------------------------------------ metrics
@@ -427,22 +492,25 @@ class Engine:
 
         mins_in = (self.clock - self.cur["start"]) / 60
         avg_diaper = np.mean([(x["end"] - x["start"]) / 60 for x in self.sessions]) if self.sessions else None
-        labels = {"wee": "Wee", "poo": "Poo", "change": "Diaper changed", "sleep": "Fell asleep", "wake": "Woke up"}
-        timeline = [{"t": e["t"], "type": e["type"], "label": labels[e["type"]]} for e in ev[::-1][:14]]
+        labels = {"wee": "Wee", "poo": "Poo", "change": "Diaper changed", "sleep": "Fell asleep",
+                  "wake": "Woke up", "leak": "Outer leak"}
+        timeline = [{"t": e["t"], "type": e["type"], "label": labels.get(e["type"], e["type"])}
+                    for e in ev[::-1][:14]]
 
         sl = self._sleep_stats()
-        diaper_ev = [e["t"] for e in ev if e["type"] in ("wee", "poo")]
+        diaper_ev = [e["t"] for e in ev if e["type"] in ("wee", "poo", "leak")]
         wet_wakes = sum(any(w - 600 <= t_ <= w + 60 for t_ in diaper_ev) for w in sl["wakes"])
         sleep_out = {k: sl[k] for k in ("sleep_min", "calm_min", "active_min", "naps", "longest_min", "current")}
         sleep_out.update(wakeups=len(sl["wakes"]), wet_wakeups=wet_wakes, runs=sl["runs"],
                          markers=[{"t": e["t"], "type": e["type"]} for e in ev
-                                  if e["type"] in ("wee", "poo", "change") and e["t"] >= self.day_start])
+                                  if e["type"] in ("wee", "poo", "change", "leak") and e["t"] >= self.day_start])
         if self.mode == "sim":
-            conn, mode_out, speed_out = {"sensors": True, "imu": True}, "sim", self.speed
-            sim_out = {"asleep": self.pod.asleep}
+            conn = {"sensors": True, "imu": True, "leak": True}
+            mode_out, speed_out = "sim", self.speed
+            sim_out = {"asleep": self.pod.asleep, "outer_leak": self.pod.outer_leak}
             room_out = self.pod.room_temp
         elif self.mode == "external":
-            conn = self.meta.get("status", {"sensors": False, "imu": False})
+            conn = self.meta.get("status", {"sensors": False, "imu": False, "leak": False})
             mode_out, speed_out = self.meta.get("mode", "serial"), self.meta.get("speed", 1)
             sim_out = self.meta.get("sim")
             room_out = (sim_out or {}).get("room_temp")

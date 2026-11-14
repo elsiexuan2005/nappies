@@ -65,6 +65,10 @@
   .assume h3 { font-size: 14px; color: var(--ink); margin: 0 0 6px; }
   .assume ul { margin: 0; padding-left: 18px; columns: 2; column-gap: 40px; }
 
+  .tiger-note { margin-top: 18px; font-size: 13px; color: var(--soft); }
+  .tiger-note b { color: var(--lagoon); }
+  #liveCard { display: none; }
+
   @media (max-width: 960px) {
     .kpis { grid-template-columns: repeat(2, 1fr); }
     .kpi { border-left: 0; border-top: 1px solid var(--line); }
@@ -116,6 +120,18 @@
       <div class="legend"><span><i style="background:var(--without)"></i>Without pod</span><span><i style="background:var(--lagoon)"></i>With pod</span></div>
       <div class="compare" id="compare"></div>
       <p class="use"><b>How P&amp;G uses it:</b> fewer leaks and less time in a soiled diaper make parents more loyal to the brand. That's the case for the subscription.</p>
+    </article>
+
+    <article class="card span" id="liveCard">
+      <h2>Live fleet from connected pods</h2>
+      <p class="why" id="liveWhy">Anonymised one-minute summaries rolled up for the last 48 hours.</p>
+      <div class="legend">
+        <span><i style="background:var(--lagoon)"></i>Pods reporting</span>
+        <span><i style="background:var(--apricot)"></i>Healthy diaper time %</span>
+      </div>
+      <div class="chart"><canvas id="liveChart"></canvas></div>
+      <p class="use" id="liveUse"><b>How P&amp;G uses it:</b> watch healthy-diaper time and active pods hour by hour without pulling raw sensor streams from the home.</p>
+      <p class="tiger-note" id="tigerNote" hidden></p>
     </article>
 
     <article class="card span">
@@ -183,6 +199,7 @@ function render(d) {
     $("lede").textContent += ` Live: ${lv.devices_24h} connected ${lv.devices_24h === 1 ? "pod" : "pods"} reporting anonymised summaries` +
       (lv.avg_healthy_pct != null ? `, average healthy diaper time ${Math.round(lv.avg_healthy_pct * 100)}%.` : ".");
   }
+  renderLive(lv);
 
   const soiled = d.compare[2];
   $("kpis").innerHTML = [
@@ -238,8 +255,65 @@ function render(d) {
   }).join("");
 
   $("assume").innerHTML = d.assumptions.concat([
-    "Retention calculator values are inputs to change, not results from the simulation."
+    "Retention calculator values are inputs to change, not results from the simulation.",
+    "Live fleet charts use anonymised cloud summaries only; raw sensor streams stay on the edge hub."
   ]).map(a => `<li>${a}</li>`).join("");
+}
+
+function renderLive(lv) {
+  const card = $("liveCard");
+  if (!lv || lv.error || !(lv.hourly && lv.hourly.length)) {
+    if (lv && lv.devices_24h) {
+      card.style.display = "block";
+      $("liveWhy").textContent = `${lv.devices_24h} pods reported in the last 24 h`
+        + (lv.summaries_total != null ? ` (${nf.format(lv.summaries_total)} summaries stored).` : ".");
+      $("liveChart").parentElement.style.display = "none";
+      document.querySelector("#liveCard .legend").style.display = "none";
+    }
+    showTigerNote(lv);
+    return;
+  }
+  card.style.display = "block";
+  $("liveChart").parentElement.style.display = "";
+  document.querySelector("#liveCard .legend").style.display = "";
+  const src = lv.aggregate_source === "continuous_aggregate"
+    ? "Tiger Data continuous aggregate (hourly)"
+    : (lv.backend === "tiger" ? "Tiger Data hypertable" : "local summary store");
+  $("liveWhy").textContent = `${lv.devices_24h} pods in the last 24 h · ${nf.format(lv.summaries_total || 0)} summaries · roll-up from ${src}.`;
+  const labels = lv.hourly.map(h => {
+    const d = new Date(h.bucket);
+    return isNaN(d) ? String(h.bucket) : d.toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" });
+  });
+  new Chart($("liveChart"), {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        { label: "Pods", data: lv.hourly.map(h => h.devices), borderColor: LAGOON, backgroundColor: "rgba(62,142,155,.12)",
+          borderWidth: 2.5, pointRadius: 0, tension: .25, yAxisID: "y", fill: true },
+        { label: "Healthy %", data: lv.hourly.map(h => h.avg_healthy_pct == null ? null : Math.round(h.avg_healthy_pct * 100)),
+          borderColor: APRICOT, borderWidth: 2, pointRadius: 0, tension: .25, yAxisID: "y1" }
+      ]
+    },
+    options: { maintainAspectRatio: false, animation: false,
+      scales: {
+        x: { grid: noGrid, ticks: { maxTicksLimit: 10 } },
+        y: { grid, beginAtZero: true, title: { display: true, text: "Pods reporting" } },
+        y1: { position: "right", grid: { drawOnChartArea: false }, min: 0, max: 100,
+              ticks: { callback: v => v + "%" }, title: { display: true, text: "Healthy diaper time" } }
+      },
+      plugins: { legend: { display: false },
+                 tooltip: { callbacks: { label: c => c.dataset.yAxisID === "y1" ? `${c.parsed.y}% healthy` : `${c.parsed.y} pods` } } } }
+  });
+  showTigerNote(lv);
+}
+
+function showTigerNote(lv) {
+  const el = $("tigerNote");
+  if (!lv || lv.backend !== "tiger") { el.hidden = true; return; }
+  el.hidden = false;
+  const via = lv.aggregate_source === "continuous_aggregate" ? "continuous aggregates" : "hypertables";
+  el.innerHTML = `<b>Powered by Tiger Data</b> — fleet summaries sit on a Timescale hypertable with retention and ${via}, so the business view stays fast as the pilot grows.`;
 }
 
 // retention calculator

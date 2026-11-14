@@ -18,7 +18,7 @@ flowchart LR
     B[(Mosquitto)]
   end
   subgraph CLOUD["Tier 2 · Cloud (P&G)"]
-    ING[ingest] --> DB[(summaries DB)]
+    ING[ingest] --> DB[(Tiger Cloud / SQLite)]
     ING --> OBJ[(bench runs)]
     FLEET[fleet / business] --> ING
     LAB[Product Lab] --> OBJ
@@ -90,13 +90,31 @@ flowchart LR
 
 **Managed-cloud equivalents (production):**
 
-| Need | AWS | Azure |
-|---|---|---|
-| HTTP services | ECS Fargate / EKS | Container Apps / AKS |
-| Summaries DB | RDS PostgreSQL | Azure Database for PostgreSQL |
-| Bench runs and models | S3 | Blob Storage |
-| Hubs connecting directly over MQTT (instead of HTTPS) | AWS IoT Core | IoT Hub / Event Grid MQTT broker |
-| Scheduled training | EventBridge + ECS task | Container Apps Jobs |
+| Need | AWS | Azure | Hackathon / pilot |
+|---|---|---|---|
+| HTTP services | ECS Fargate / EKS | Container Apps / AKS | Compose / `run_local.py` |
+| Summaries DB | RDS PostgreSQL or **Tiger Cloud** | Azure Database for PostgreSQL or **Tiger Cloud** | `DATABASE_URL` → Tiger Cloud; else SQLite |
+| Bench runs and models | S3 | Blob Storage | Shared volume |
+| Hubs connecting directly over MQTT (instead of HTTPS) | AWS IoT Core | IoT Hub / Event Grid MQTT broker | Mosquitto / dev broker |
+| Scheduled training | EventBridge + ECS task | Container Apps Jobs | Compose one-shot / CronJob |
+
+### Tiger Data (TimescaleDB) for fleet summaries
+Set `DATABASE_URL` to a [Tiger Cloud](https://console.cloud.timescale.com/) Postgres URL. Ingest then:
+- stores anonymised summaries on a **hypertable** (`summaries`, partitioned by `ts`)
+- applies a **retention policy** (`RETENTION_DAYS`, default 365)
+- maintains a **continuous aggregate** `summaries_hourly` for the business dashboard
+- exposes `GET /v1/aggregate` with `backend: "tiger"`, `aggregate_source`, and an `hourly` series
+
+Without `DATABASE_URL`, ingest keeps using SQLite (offline / laptop demo). Edge spool stays SQLite either way.
+
+```bash
+# one-time: create a Tiger Cloud service, copy the connection string
+export DATABASE_URL='postgres://tsdbadmin:...@....tsdb.cloud.timescale.com:5432/tsdb?sslmode=require'
+pip install -r requirements.txt
+python services/cloud/seed_tiger.py          # synthetic 40-pod / 48h history for judges
+python run_local.py                          # or: docker compose -f deploy/docker-compose.cloud.yml up --build
+# open /business — live chart + “Powered by Tiger Data”
+```
 
 ## Security and privacy
 - **Edge:** MQTT bound to the hub (TLS and passwords in production, see `mosquitto.conf`); BLE pairing with encryption; parent-api on the home LAN only.
@@ -111,7 +129,7 @@ flowchart LR
 - **Containers:** Compose `restart: unless-stopped`; Kubernetes readiness probes on `/healthz`.
 
 ## Known limits
-- **Ingest:** SQLite with a single replica. Move to Postgres to scale out.
+- **Ingest:** SQLite by default; set `DATABASE_URL` for Tiger Cloud (hypertables + continuous aggregates). Same insert/aggregate API either way.
 - **Shared storage:** the cloud uses a shared volume for bench runs and models; object storage would replace it in production.
 - **Tested here:** the services as local processes (dev broker), and validated Compose/Kubernetes configs.
 - **Not yet tested:** container images. Docker Hub was blocked in the build environment, so build them on your machine first.

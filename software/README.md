@@ -1,7 +1,8 @@
 # Smart Diaper Pod: DurHack P&G challenge
 
 > **Repo layout.** `../hardware/` holds the Arduino sketches: the team's original single-sensor sketches and
-> `record_sensor.py`, plus `pod_sensors/` (UNO Q: moisture + gas + DHT11 in one sketch) and `nicla_imu/`.
+> `record_sensor.py`, plus `pod_sensors/` (UNO Q: moisture + gas + DHT11 in one sketch),
+> `leak_detection/` (outer-nappy leak probe + LED on a separate board), and `nicla_imu/`.
 > This `software/` folder is the Python side: models, dashboards, bench tools and the microservices.
 > Run every command below from inside `software/`.
 >
@@ -127,17 +128,40 @@ Assumptions are listed on the page and in `fleet.py`.
 colour-changing pH strip with the Nicla camera) and supplement suggestions (that's medical advice; the app suggests
 everyday actions like "offer a feed" and points to a doctor instead).
 
+## Tiger Data (MLH bonus): fleet summaries on TimescaleDB
+
+Cloud ingest stores anonymised 1‑minute summaries. With a Tiger Cloud connection string it uses a
+**hypertable**, **retention policy**, and **continuous aggregate** (`summaries_hourly`) for the business
+dashboard. Without `DATABASE_URL` it falls back to SQLite (same API). Edge spool stays local SQLite.
+
+```bash
+# 1. Create a free service at https://console.cloud.timescale.com/ and copy the URL
+export DATABASE_URL='postgres://tsdbadmin:...@....tsdb.cloud.timescale.com:5432/tsdb?sslmode=require'
+pip install -r requirements.txt
+
+# 2. Seed ~40 pods × 48 h so judges see the live chart without a real fleet
+python services/cloud/seed_tiger.py
+
+# 3. Run the stack (DATABASE_URL is inherited by ingest)
+python run_local.py
+# open http://localhost:9002/business  — live hourly chart + “Powered by Tiger Data”
+```
+
+Docker: `DATABASE_URL=... API_KEY=... docker compose -f deploy/docker-compose.cloud.yml up --build`.
+Details: [`ARCHITECTURE.md`](ARCHITECTURE.md) (Tiger Data section).
+
 ## Files
 
 | File | What it does |
 |---|---|
 | `../hardware/pod_sensors/` | UNO Q: A0/A1 at 50 Hz + DHT11 every 2 s → `{"timestamp_ms","sensor_raw","gas_raw","temp_c","humidity"}` once per second |
+| `../hardware/leak_detection/` | Separate board: outer-nappy moisture on A0 + LED on D2 → `{"timestamp_ms","sensor_raw","leak_detected"}`. `pod_stream` treats this as the outer leak channel (does not overwrite inside moisture) |
 | `../hardware/nicla_imu/` | Nicla Vision (Arduino firmware): IMU at 50 Hz → `{"timestamp_ms","acc_mean","acc_std","gyro_mean"}` once per second |
 | `../hardware/nicla_vision/` | Nicla Vision (OpenMV): team's `motion_detection.py` camera motion (read as-is) and `motion_stream.py` (JSON once per second, camera + IMU) |
 | `../hardware/moisture_sensor/`, `gas_sensor/`, `record_sensor.py` | Team's original single-sensor sketches and recorder. Still work with everything here (`pod_stream.py` reads their JSON, `calibrate.py` reads their CSVs) |
-| `services/edge/*`, `services/cloud/*` | Microservices (see `ARCHITECTURE.md`) |
+| `services/edge/*`, `services/cloud/*` | Microservices (see `ARCHITECTURE.md`). Cloud: `db.py` (Tiger/SQLite), `ingest.py`, `seed_tiger.py` |
 | `run_local.py`, `deploy/` | Run the services locally / Docker Compose / Kubernetes |
-| `pod_stream.py` | Reads both USB ports at once, merges into one row per second, shows connection status |
+| `pod_stream.py` | Reads USB ports at once (sensor board, optional leak board, Nicla), merges into one row per second, shows connection status |
 | `capture.py` | Records the merged stream with labels you type live |
 | `calibrate.py` | Turns labelled captures into `calibration.json` |
 | `config.py` | Physiology and diaper assumptions (verify and cite these) |
@@ -173,7 +197,8 @@ everyday actions like "offer a feed" and points to a doctor instead).
 2. Wee (pour water on the sensor) → **WET**; asleep → **CAN WAIT**
 3. More wees → probability rises → **CHANGE SOON** → **CHANGE NOW**
 4. Poo (vinegar/alcohol swab near the gas sensor) → **SOILED → CHANGE NOW**
-5. Press *Diaper changed* → resets the baseline
+5. Outer leak (wet the outer probe, or *Outer leak* in the simulator) → **CHANGE NOW**
+6. Press *Diaper changed* → resets the baseline
 Use speed-up ×60–×600 in the simulator to show a whole night in a minute.
 
 ## Hardware notes
@@ -183,6 +208,7 @@ Use speed-up ×60–×600 in the simulator to show a whole night in a minute.
   - **DHT11:** power it from 3.3 V.
 - **Moisture (DFRobot SEN0193, capacitive v2):** outputs 0–3.0 V (safe on A0) and reads **lower** when wet. Roughly dry ≈ 3150, in water ≈ 1580 on the UNO Q (dry ≈ 520 / water ≈ 260 on a classic 5 V Uno).
 - **One sketch per board:** the team's `moisture_sensor.ino` and `gas_sensor.ino` each read one sensor. Flash `pod_sensors.ino` to get both (plus the DHT11) from the same board.
+- **Outer leak (`leak_detection/`):** a **separate** board — moisture probe on A0, LED on D2. Do not merge into `pod_sensors` (D2 is already used for the DHT11). Its JSON includes `leak_detected`, so `pod_stream` routes `sensor_raw` to the outer-leak channel instead of inside-nappy moisture. Calibrate `DRY_READING` / `LEAK_READING` in the sketch for your probe. The LED also turns on when the parent app is in a **red** alert (`{"led":true}` from `pod_stream`); re-flash after pulling. `pod_sensors` can drive an LED on **D3** the same way (`USE_LED`).
 - **DHT11:** module VCC → 5 V, GND → GND, DATA → D2 (a bare 4-pin sensor needs a 10k pull-up from DATA to 5 V).
   Install "DHT sensor library" by Adafruit (plus "Adafruit Unified Sensor"). Set `USE_DHT 0` in the sketch if it isn't connected.
   Put it near the cot, away from your laptop and the gas sensor's heater, which are warm and will push the reading up.

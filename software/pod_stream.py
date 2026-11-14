@@ -1,5 +1,6 @@
-"""Reads the sensor board (Arduino UNO Q: moisture, gas, DHT11) and the Nicla (IMU) at the
-same time and merges them into ONE row per second: t, moisture, gas, acc_*, gyro_mean, temp, hum.
+"""Reads the sensor board (Arduino UNO Q: moisture, gas, DHT11), optional outer-leak board,
+and the Nicla (IMU) at the same time and merges them into ONE row per second:
+t, moisture, gas, acc_*, gyro_mean, temp, hum, leak_detected, leak_raw.
 
   python pod_stream.py --list                  # show USB serial ports (Arduino boards marked)
   python pod_stream.py                         # auto-detect every Arduino board and show live data
@@ -8,12 +9,16 @@ same time and merges them into ONE row per second: t, moisture, gas, acc_*, gyro
 Lines it understands (port order doesn't matter - each line says what it carries):
   JSON (team format, hardware/*.ino):
     {"timestamp_ms":..,"sensor_raw":..}                      moisture_sensor.ino (moisture only)
+    {"timestamp_ms":..,"sensor_raw":..,"leak_detected":..}   leak_detection.ino (outer leak + LED)
     {"timestamp_ms":..,"gas_raw":..}                         gas_sensor.ino (gas only)
     {"timestamp_ms":..,"sensor_raw":..,"gas_raw":..,"temp_c":..,"humidity":..}   pod_sensors.ino
     {"timestamp_ms":..,"acc_mean":..,"acc_std":..,"gyro_mean":..}               nicla_imu.ino
     {"timestamp_ms":..,"motion_pixels":..,"moving":..,[acc_*, gyro_mean]}       nicla_vision/motion_stream.py
   Text from nicla_vision/motion_detection.py (OpenMV camera):  "motion_pixels: 340 movement_count: 2"
   CSV (older sketches):  S,ms,moisture,gas[,temp,hum]   I,ms,acc_mean,acc_std,gyro_mean
+
+Presence of leak_detected means the line is from leak_detection.ino: sensor_raw is the outer
+probe and must not overwrite inside-nappy moisture.
 
 Motion: if the Nicla sends IMU values they are used directly. If it only sends camera motion
 (changed pixels per frame), the busiest frame of each second is converted to the same activity
@@ -41,7 +46,9 @@ STALE_S = 3.0
 class PodStream:
     def __init__(self, ports, baud=115200, period=1.0):
         self.latest = {c: None for c in COLS}
-        self.seen = {"S": 0.0, "I": 0.0, "D": 0.0, "M": 0.0}   # last line per source (M = camera motion)
+        self.latest["leak_detected"] = False
+        self.latest["leak_raw"] = None
+        self.seen = {"S": 0.0, "I": 0.0, "D": 0.0, "M": 0.0, "L": 0.0}  # L = outer leak board
         self._motion = []                                       # (time, changed pixels) from the camera
         self.rows, self.lock = [], threading.Lock()
         self.errors = []
@@ -120,10 +127,19 @@ class PodStream:
             return v if v == v else None          # drop NaN
 
         with self.lock:
-            m = num("sensor_raw") if "sensor_raw" in d else num("moisture_raw")
-            if m is not None:
-                self.latest["moisture"] = m
-                self.seen["S"] = now
+            # Outer-leak board: same sensor_raw key as moisture, but leak_detected marks it.
+            if "leak_detected" in d:
+                raw = num("sensor_raw") if "sensor_raw" in d else num("moisture_raw")
+                if raw is not None:
+                    self.latest["leak_raw"] = raw
+                flag = d.get("leak_detected")
+                self.latest["leak_detected"] = flag is True or flag == "true" or flag == 1
+                self.seen["L"] = now
+            else:
+                m = num("sensor_raw") if "sensor_raw" in d else num("moisture_raw")
+                if m is not None:
+                    self.latest["moisture"] = m
+                    self.seen["S"] = now
             g = num("gas_raw")
             if g is not None:
                 self.latest["gas"] = g
@@ -152,6 +168,9 @@ class PodStream:
                     continue
                 now = time.time()
                 row = {"t": now, **self.latest}
+                if now - self.seen["L"] >= STALE_S:      # no recent outer-leak board
+                    row["leak_detected"] = False
+                    row["leak_raw"] = None
                 if now - self.seen["I"] >= STALE_S:      # no IMU: use camera motion if we have it
                     cam = self._camera_activity(now)
                     if cam:
@@ -167,12 +186,27 @@ class PodStream:
             out, self.rows = self.rows, []
         return out
 
+    def set_alert_led(self, on):
+        """Tell every open board to turn the alert LED on/off (parent app red state).
+
+        Boards that understand it: leak_detection.ino, pod_sensors.ino (USE_LED).
+        Harmless no-op on sketches that ignore inbound JSON.
+        """
+        msg = b'{"led":true}\n' if on else b'{"led":false}\n'
+        with self.lock:
+            for s in self.serials:
+                try:
+                    s.write(msg)
+                except Exception as e:  # noqa: BLE001
+                    self.errors.append(f"{getattr(s, 'port', '?')}: led write: {e}")
+
     def status(self):
         now = time.time()
         imu, cam = now - self.seen["I"] < STALE_S, now - self.seen["M"] < STALE_S
         return {"sensors": now - self.seen["S"] < STALE_S, "imu": imu or cam,
                 "motion_source": "imu" if imu else ("camera" if cam else None),
-                "climate": now - self.seen["D"] < 10}
+                "climate": now - self.seen["D"] < 10,
+                "leak": now - self.seen["L"] < STALE_S}
 
 
 def _is_board(p):
@@ -216,15 +250,18 @@ if __name__ == "__main__":
         list_ports()
         raise SystemExit
     ps = PodStream(resolve_ports(a.port))
-    print("t        moisture    gas   acc_std  gyro   temp   hum   [sensor board / nicla]")
+    print("t        moisture    gas   acc_std  gyro   temp   hum  leak  [sensors / nicla / leak]")
     while True:
         time.sleep(1)
         st = ps.status()
         for r in ps.read():
+            leak = "YES" if r.get("leak_detected") else ("--" if r.get("leak_raw") is None else "no")
             print(f"{time.strftime('%H:%M:%S', time.localtime(r['t']))} {r['moisture']:8.1f} {r['gas']:7.1f} "
                   f"{r['acc_std']:8.4f} {r['gyro_mean']:6.1f} "
-                  f"{r['temp'] if r['temp'] is not None else '-':>5} {r['hum'] if r['hum'] is not None else '-':>5}   "
-                  f"[{'OK' if st['sensors'] else '--'} / {'OK' if st['imu'] else '--'}]")
+                  f"{r['temp'] if r['temp'] is not None else '-':>5} {r['hum'] if r['hum'] is not None else '-':>5}  "
+                  f"{leak:>4}  "
+                  f"[{'OK' if st['sensors'] else '--'} / {'OK' if st['imu'] else '--'} / "
+                  f"{'OK' if st['leak'] else '--'}]")
         for e in ps.errors:
             print("ERROR", e)
         ps.errors.clear()
