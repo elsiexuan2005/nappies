@@ -10,13 +10,10 @@
 > 2. `python run_local.py`: the full microservice stack on one laptop, no Docker (see `ARCHITECTURE.md`).
 > 3. Docker: `deploy/docker-compose.edge.yml` (hub) + `deploy/docker-compose.cloud.yml` (cloud), or `deploy/k8s/`.
 >
-> **Motion from the Nicla Vision: two options.**
-> - **Camera (team's approach, OpenMV firmware):** run `../hardware/nicla_vision/motion_detection.py` as it is, or
->   `motion_stream.py` (same detection, one JSON line per second, plus the Nicla's IMU if available). Save it as
->   `main.py` on the Nicla's drive and close the OpenMV IDE so the software can open the port. Images never leave the Nicla.
-> - **IMU (Arduino firmware):** flash `../hardware/nicla_imu/nicla_imu.ino`.
->
-> Either way the software converts it into the same still/moving/asleep signals.
+> **Motion from the Nicla Vision:** flash `../hardware/nicla_imu/nicla_imu.ino` with the Arduino IDE
+> (board "Arduino Nicla Vision", library `Arduino_LSM6DSOX`). It sends the IMU's movement once per second, which
+> drives still/moving, sleep and "woken by the diaper". No Nicla plugged in: the app treats the baby as still.
+> (The camera-based `../hardware/nicla_vision/` scripts are also understood, but the team isn't using them.)
 >
 > **Calibrate before trusting live readings.** The team's recordings suggest this moisture sensor reads **higher when
 > wetter**, the opposite of the default values. Until `calibration.json` exists, the app says "not calibrated".
